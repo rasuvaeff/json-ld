@@ -19,7 +19,7 @@ final readonly class Graph
     private array $nodes;
 
     /**
-     * @param list<array<string, mixed>> $expanded list of expanded node objects
+     * @param list<array<array-key, mixed>> $expanded list of expanded node objects
      */
     public function __construct(array $expanded)
     {
@@ -27,7 +27,7 @@ final readonly class Graph
         $byId = [];
 
         foreach ($expanded as $entry) {
-            if (!is_array($entry) || array_is_list($entry)) {
+            if (array_is_list($entry)) {
                 continue;
             }
 

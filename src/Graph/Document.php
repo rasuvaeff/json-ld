@@ -11,6 +11,8 @@ use Rasuvaeff\JsonLd\Keywords;
  * graphs found in `@graph` members.
  *
  * @api
+ *
+ * @psalm-import-type JsonValue from \Rasuvaeff\JsonLd\Json
  */
 final readonly class Document
 {
@@ -24,7 +26,9 @@ final readonly class Document
      */
     public function __construct(array $expanded)
     {
+        /** @var list<array<array-key, mixed>> $default */
         $default = [];
+        /** @var array<string, list<array<array-key, mixed>>> $named */
         $named = [];
 
         foreach ($expanded as $entry) {
@@ -32,7 +36,9 @@ final readonly class Document
                 continue;
             }
 
+            /** @var JsonValue $graphEntries */
             $graphEntries = $entry[Keywords::GRAPH] ?? null;
+            /** @var JsonValue $id */
             $id = $entry[Keywords::ID] ?? null;
 
             if ($graphEntries === null) {
@@ -44,6 +50,7 @@ final readonly class Document
             $graphName = is_string($id) ? $id : self::DEFAULT_GRAPH;
             $items = is_array($graphEntries) && array_is_list($graphEntries) ? $graphEntries : [$graphEntries];
 
+            /** @var JsonValue $item */
             foreach ($items as $item) {
                 if (is_array($item) && !array_is_list($item) && !array_key_exists(Keywords::GRAPH, $item)) {
                     $named[$graphName][] = $item;
@@ -58,6 +65,9 @@ final readonly class Document
         }
     }
 
+    /**
+     * @param list<mixed> $expanded
+     */
     public static function fromExpanded(array $expanded): self
     {
         return new self($expanded);

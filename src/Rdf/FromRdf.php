@@ -18,6 +18,10 @@ use Rasuvaeff\JsonLd\Keywords;
  * The result is a document in expanded form.
  *
  * @api
+ *
+ * @psalm-import-type JsonValue from \Rasuvaeff\JsonLd\Json
+ * @psalm-type NodeShape = array{id: string, types: list<string>, props: array<string, list<ArrayObject<string, mixed>>>}
+ * @psalm-type Usage = array{subject: string, property: string, slot: ArrayObject<string, mixed>}
  */
 final class FromRdf
 {
@@ -51,9 +55,9 @@ final class FromRdf
      */
     public function fromRdf(Dataset $dataset): array
     {
-        /** @var array<string, array<string, array<string, mixed>>> $graphMap graph => subject => node */
+        /** @var array<string, array<string, NodeShape>> $graphMap graph => subject => node */
         $graphMap = [Keywords::DEFAULT_GRAPH => []];
-        /** @var array<string, array<string, list<array{subject: string, property: string, slot: ArrayObject<string, mixed>}>>> $usages */
+        /** @var array<string, array<string, list<Usage>>> $usages */
         $usages = [];
         /** @var array<string, array<string, true>> $compoundSubjects */
         $compoundSubjects = [];
@@ -64,17 +68,17 @@ final class FromRdf
             $graphMap[$name] ??= [];
 
             if ($name !== Keywords::DEFAULT_GRAPH) {
-                $graphMap[Keywords::DEFAULT_GRAPH][$name] ??= [Keywords::ID => $name];
+                $graphMap[Keywords::DEFAULT_GRAPH][$name] ??= self::emptyNode($name);
             }
 
             $subject = self::id($quad->subject);
-            $graphMap[$name][$subject] ??= [Keywords::ID => $subject];
+            $graphMap[$name][$subject] ??= self::emptyNode($subject);
 
             $object = $quad->object;
 
             if (!$object instanceof Literal) {
                 $objectId = self::id($object);
-                $graphMap[$name][$objectId] ??= [Keywords::ID => $objectId];
+                $graphMap[$name][$objectId] ??= self::emptyNode($objectId);
             }
 
             $property = $quad->predicate->value;
@@ -84,39 +88,33 @@ final class FromRdf
             }
 
             if ($property === Literal::RDF_TYPE && !$this->useRdfType && !$object instanceof Literal) {
-                $types = $graphMap[$name][$subject][Keywords::TYPE] ?? [];
                 $objectId = self::id($object);
 
-                if (!in_array($objectId, $types, true)) {
-                    $types[] = $objectId;
+                if (!in_array($objectId, $graphMap[$name][$subject]['types'], true)) {
+                    $graphMap[$name][$subject]['types'][] = $objectId;
                 }
-
-                $graphMap[$name][$subject][Keywords::TYPE] = $types;
 
                 continue;
             }
 
             $value = new ArrayObject($this->objectToValue($object));
+            $values = $graphMap[$name][$subject]['props'][$property] ?? [];
+            $isNew = true;
 
-            $values = $graphMap[$name][$subject][$property] ?? [];
-            $index = false;
-
-            foreach ($values as $position => $existing) {
+            foreach ($values as $existing) {
                 if ($existing->getArrayCopy() === $value->getArrayCopy()) {
-                    $index = $position;
+                    $value = $existing;
+                    $isNew = false;
 
                     break;
                 }
             }
 
-            $isNew = $index === false;
-
             if ($isNew) {
                 $values[] = $value;
-                $index = count($values) - 1;
             }
 
-            $graphMap[$name][$subject][$property] = $values;
+            $graphMap[$name][$subject]['props'][$property] = $values;
 
             if (!$object instanceof Literal) {
                 $objectId = self::id($object);
@@ -136,60 +134,111 @@ final class FromRdf
             }
         }
 
-        foreach ($graphMap as $name => &$graph) {
+        foreach ($graphMap as $name => $graph) {
             $this->collapseLists($graph, $usages[$name] ?? [], $usageTotals);
             $this->collapseCompoundLiterals($graph, $usages[$name] ?? [], $compoundSubjects[$name] ?? []);
+            $graphMap[$name] = $graph;
         }
-
-        unset($graph);
 
         $default = $graphMap[Keywords::DEFAULT_GRAPH];
         unset($graphMap[Keywords::DEFAULT_GRAPH]);
+
+        /** @var array<string, list<array<string, mixed>>> $named */
+        $named = [];
 
         foreach ($graphMap as $name => $graph) {
             ksort($graph, SORT_STRING);
             $entries = [];
 
             foreach ($graph as $node) {
-                if (count($node) > 1) {
-                    $entries[] = $node;
+                if (!self::isBare($node)) {
+                    $entries[] = self::render($node);
                 }
             }
 
-            $default[(string) $name][Keywords::GRAPH] = $entries;
+            $named[strval($name)] = $entries;
         }
 
         ksort($default, SORT_STRING);
         $result = [];
 
-        foreach ($default as $node) {
-            if (count($node) > 1) {
-                $result[] = $node;
+        foreach ($default as $id => $node) {
+            $rendered = self::render($node);
+
+            if (isset($named[$id])) {
+                $rendered[Keywords::GRAPH] = $named[$id];
+            }
+
+            if (count($rendered) > 1) {
+                $result[] = $rendered;
             }
         }
 
-        /** @var list<mixed> */
         return self::finish($result);
     }
 
     /**
      * Value objects are shared handles while the graph is being built, so
      * that a list head replaced later is seen by every list holding it.
+     *
+     * @return list<mixed>
      */
-    private static function finish(mixed $value): mixed
+    private static function finish(mixed $value): array
+    {
+        /** @var list<mixed> */
+        return self::unwrap($value);
+    }
+
+    private static function unwrap(mixed $value): mixed
     {
         if ($value instanceof ArrayObject) {
             $value = $value->getArrayCopy();
         }
 
-        return is_array($value) ? array_map(self::finish(...), $value) : $value;
+        return is_array($value) ? array_map(self::unwrap(...), $value) : $value;
+    }
+
+    /**
+     * @return NodeShape
+     */
+    private static function emptyNode(string $id): array
+    {
+        return ['id' => $id, 'types' => [], 'props' => []];
+    }
+
+    /**
+     * @param NodeShape $node
+     */
+    private static function isBare(array $node): bool
+    {
+        return $node['types'] === [] && $node['props'] === [];
+    }
+
+    /**
+     * @param NodeShape $node
+     *
+     * @return array<string, mixed>
+     */
+    private static function render(array $node): array
+    {
+        $result = [Keywords::ID => $node['id']];
+
+        if ($node['types'] !== []) {
+            $result[Keywords::TYPE] = $node['types'];
+        }
+
+        foreach ($node['props'] as $property => $values) {
+            $result[$property] = $values;
+        }
+
+        return $result;
     }
 
     /**
      * Replaces well-formed rdf:first/rdf:rest chains with list objects.
      *
-     * @param array<string, array<string, mixed>> $graph
-     * @param array<string, list<array{subject: string, property: string, slot: ArrayObject<string, mixed>}>> $usages
+     * @param array<string, NodeShape> $graph
+     * @param array<string, list<Usage>> $usages
      * @param array<string, int> $usageTotals usages of every node across all graphs
      */
     private function collapseLists(array &$graph, array $usages, array $usageTotals): void
@@ -199,15 +248,16 @@ final class FromRdf
             $property = $usage['property'];
             $head = $usage['slot'];
 
+            /** @var list<ArrayObject<string, mixed>> $list */
             $list = [];
             $listNodes = [];
 
             while ($property === Literal::RDF_REST
                 && Syntax::isBlankNodeId($node)
-                && $this->isWellFormedListNode($graph[$node] ?? [], $usages[$node] ?? [], $usageTotals[$node] ?? 0)
+                && isset($graph[$node], $usages[$node][0])
+                && self::isWellFormedListNode($graph[$node], count($usages[$node]), $usageTotals[$node] ?? 0)
             ) {
-                $listNode = $graph[$node];
-                array_unshift($list, $listNode[Literal::RDF_FIRST][0]);
+                array_unshift($list, $graph[$node]['props'][Literal::RDF_FIRST][0]);
                 array_unshift($listNodes, $node);
 
                 $usage = $usages[$node][0];
@@ -225,42 +275,29 @@ final class FromRdf
     }
 
     /**
-     * @param array<string, mixed> $node
-     * @param list<array{subject: string, property: string, slot: ArrayObject<string, mixed>}> $usages
+     * @param NodeShape $node
      */
-    private function isWellFormedListNode(array $node, array $usages, int $total): bool
+    private static function isWellFormedListNode(array $node, int $usages, int $total): bool
     {
-        if (count($usages) !== 1 || $total !== 1) {
+        if ($usages !== 1 || $total !== 1) {
             return false;
         }
 
-        if (!isset($node[Literal::RDF_FIRST], $node[Literal::RDF_REST])
-            || count($node[Literal::RDF_FIRST]) !== 1
-            || count($node[Literal::RDF_REST]) !== 1
-        ) {
-            return false;
-        }
+        $properties = array_keys($node['props']);
+        sort($properties);
 
-        $allowed = [Keywords::ID, Literal::RDF_FIRST, Literal::RDF_REST];
-        $keys = array_keys($node);
-
-        if (array_key_exists(Keywords::TYPE, $node)) {
-            if ($node[Keywords::TYPE] !== [self::RDF_LIST]) {
-                return false;
-            }
-
-            $allowed[] = Keywords::TYPE;
-        }
-
-        return array_diff($keys, $allowed) === [];
+        return $properties === [Literal::RDF_FIRST, Literal::RDF_REST]
+            && count($node['props'][Literal::RDF_FIRST]) === 1
+            && count($node['props'][Literal::RDF_REST]) === 1
+            && ($node['types'] === [] || $node['types'] === [self::RDF_LIST]);
     }
 
     /**
      * Turns compound literal nodes (rdf:value, rdf:language, rdf:direction)
      * back into value objects.
      *
-     * @param array<string, array<string, mixed>> $graph
-     * @param array<string, list<array{subject: string, property: string, slot: ArrayObject<string, mixed>}>> $usages
+     * @param array<string, NodeShape> $graph
+     * @param array<string, list<Usage>> $usages
      * @param array<string, true> $compoundSubjects
      */
     private function collapseCompoundLiterals(array &$graph, array $usages, array $compoundSubjects): void
@@ -272,15 +309,22 @@ final class FromRdf
                 continue;
             }
 
-            $node = $graph[$id];
-            $literal = [Keywords::VALUE => $node[self::RDF_VALUE][0][Keywords::VALUE] ?? null];
+            $props = $graph[$id]['props'];
+            /** @var array<string, JsonValue> $literal */
+            $literal = [Keywords::VALUE => ($props[self::RDF_VALUE][0] ?? null)?->offsetGet(Keywords::VALUE)];
 
-            if (isset($node[self::RDF_LANGUAGE][0][Keywords::VALUE])) {
-                $literal[Keywords::LANGUAGE] = $node[self::RDF_LANGUAGE][0][Keywords::VALUE];
+            /** @var JsonValue $language */
+            $language = ($props[self::RDF_LANGUAGE][0] ?? null)?->offsetGet(Keywords::VALUE);
+
+            if ($language !== null) {
+                $literal[Keywords::LANGUAGE] = $language;
             }
 
-            if (isset($node[self::RDF_DIRECTION][0][Keywords::VALUE])) {
-                $literal[Keywords::DIRECTION] = $node[self::RDF_DIRECTION][0][Keywords::VALUE];
+            /** @var JsonValue $direction */
+            $direction = ($props[self::RDF_DIRECTION][0] ?? null)?->offsetGet(Keywords::VALUE);
+
+            if ($direction !== null) {
+                $literal[Keywords::DIRECTION] = $direction;
             }
 
             $nodeUsages[0]['slot']->exchangeArray($literal);
@@ -328,6 +372,7 @@ final class FromRdf
             $result[Keywords::LANGUAGE] = $term->language;
         } elseif ($datatype === Literal::RDF_JSON) {
             try {
+                /** @var JsonValue $converted */
                 $converted = json_decode($lexical, true, 512, JSON_THROW_ON_ERROR);
             } catch (JsonException) {
                 throw new InvalidInputException('invalid JSON literal');
@@ -353,6 +398,7 @@ final class FromRdf
 
         if ($this->useNativeTypes && $datatype === Literal::RDF_JSON) {
             try {
+                /** @var JsonValue $converted */
                 $converted = json_decode($lexical, true, 512, JSON_THROW_ON_ERROR);
             } catch (JsonException) {
                 throw new InvalidInputException('invalid JSON literal');

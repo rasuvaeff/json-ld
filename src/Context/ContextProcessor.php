@@ -19,6 +19,8 @@ use Rasuvaeff\JsonLd\Loader\ContextLoaderInterface;
  * Remote contexts are loaded only through the injected loader.
  *
  * @api
+ *
+ * @psalm-import-type JsonValue from \Rasuvaeff\JsonLd\Json
  */
 final readonly class ContextProcessor
 {
@@ -280,6 +282,7 @@ final readonly class ContextProcessor
         }
 
         if ($remoteContexts === [] && array_key_exists('@base', $context)) {
+            /** @var JsonValue $base */
             $base = $context['@base'];
 
             if ($base === null) {
@@ -294,6 +297,7 @@ final readonly class ContextProcessor
         }
 
         if (array_key_exists('@vocab', $context)) {
+            /** @var JsonValue $vocab */
             $vocab = $context['@vocab'];
 
             if ($vocab === null) {
@@ -351,7 +355,7 @@ final readonly class ContextProcessor
         );
 
         foreach (array_keys($context) as $key) {
-            $key = (string) $key;
+            $key = strval($key);
 
             if (in_array($key, self::CONTEXT_KEYWORDS, true)) {
                 continue;
@@ -388,6 +392,7 @@ final readonly class ContextProcessor
                 throw new InvalidContextException('keyword redefinition');
             }
 
+            /** @var JsonValue $memberValue */
             foreach ($value as $member => $memberValue) {
                 if (($member !== '@container' || $memberValue !== '@set') && $member !== '@protected') {
                     throw new InvalidContextException('keyword redefinition');
@@ -415,6 +420,7 @@ final readonly class ContextProcessor
             throw new InvalidContextException('invalid term definition');
         }
 
+        /** @var array<string, mixed> $value */
         $protected = $scope->protected;
 
         if (array_key_exists('@protected', $value)) {
@@ -623,6 +629,7 @@ final readonly class ContextProcessor
         $language = null;
 
         if (array_key_exists('@language', $value) && !array_key_exists('@type', $value)) {
+            /** @var JsonValue $language */
             $language = $value['@language'];
 
             if ($language !== null && !is_string($language)) {
@@ -636,6 +643,7 @@ final readonly class ContextProcessor
         $direction = null;
 
         if (array_key_exists('@direction', $value) && !array_key_exists('@type', $value)) {
+            /** @var JsonValue $direction */
             $direction = $value['@direction'];
 
             if ($direction !== null && $direction !== 'ltr' && $direction !== 'rtl') {
@@ -648,6 +656,7 @@ final readonly class ContextProcessor
         $nest = null;
 
         if (array_key_exists('@nest', $value)) {
+            /** @var JsonValue $nest */
             $nest = $value['@nest'];
 
             if (!is_string($nest) || ($nest !== '@nest' && Keywords::isKeyword($nest))) {
@@ -733,17 +742,22 @@ final readonly class ContextProcessor
             throw new InvalidContextException('invalid container mapping');
         }
 
+        $keywords = [];
+
         foreach ($items as $item) {
             if (!is_string($item) || !in_array($item, self::CONTAINER_KEYWORDS, true)) {
                 throw new InvalidContextException('invalid container mapping');
             }
+
+            $keywords[] = $item;
         }
 
-        if (count(array_unique($items)) !== count($items)) {
+        if (count(array_unique($keywords)) !== count($keywords)) {
             throw new InvalidContextException('invalid container mapping');
         }
 
-        sort($items);
+        sort($keywords);
+        $items = $keywords;
         $key = implode(',', $items);
 
         $valid = count($items) === 1

@@ -12,6 +12,8 @@ use Rasuvaeff\JsonLd\Exception\InvalidJsonException;
  * is represented as associative arrays (never {@see \stdClass}) so that the
  * whole processor stays psalm-friendly.
  *
+ * @psalm-type JsonValue = null|bool|int|float|string|array<array-key, mixed>
+ *
  * @internal
  */
 final class Json

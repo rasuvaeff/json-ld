@@ -207,7 +207,9 @@ final class NQuads
                 $token = $m[1];
 
                 if ($token[0] === 'u' || $token[0] === 'U') {
-                    return mb_chr((int) hexdec(substr($token, 1))) ?: '';
+                    $character = mb_chr((int) hexdec(substr($token, 1)));
+
+                    return $character === false ? '' : $character;
                 }
 
                 return match ($token) {

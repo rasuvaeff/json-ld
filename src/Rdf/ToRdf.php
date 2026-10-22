@@ -19,6 +19,8 @@ use Rasuvaeff\JsonLd\NodeMap;
  * identifiers are skipped, as the algorithm requires.
  *
  * @api
+ *
+ * @psalm-import-type JsonValue from \Rasuvaeff\JsonLd\Json
  */
 final class ToRdf
 {
@@ -57,7 +59,7 @@ final class ToRdf
         $quads = [];
 
         foreach ($graphs as $name => $graph) {
-            $name = (string) $name;
+            $name = strval($name);
 
             if ($name === Keywords::DEFAULT_GRAPH) {
                 $graphTerm = null;
@@ -70,7 +72,7 @@ final class ToRdf
             ksort($graph, SORT_STRING);
 
             foreach ($graph as $subject => $node) {
-                $subject = (string) $subject;
+                $subject = strval($subject);
 
                 if (!self::wellFormed($subject)) {
                     continue;
@@ -81,13 +83,17 @@ final class ToRdf
                 sort($properties, SORT_STRING);
 
                 foreach ($properties as $property) {
+                    /** @var JsonValue $values */
+                    /** @var JsonValue $values */
                     $values = $node[$property];
+                    $values = is_array($values) ? $values : [];
 
                     if ($property === Keywords::ID) {
                         continue;
                     }
 
                     if ($property === Keywords::TYPE) {
+                        /** @var JsonValue $type */
                         foreach ($values as $type) {
                             if (is_string($type) && self::wellFormed($type)) {
                                 $quads[] = new Quad($subjectTerm, new Iri(Literal::RDF_TYPE), self::node($type), $graphTerm);
@@ -111,6 +117,7 @@ final class ToRdf
 
                     $predicate = new Iri($property);
 
+                    /** @var JsonValue $item */
                     foreach ($values as $item) {
                         $object = $this->objectToRdf($item, $quads, $graphTerm, $map);
 
@@ -134,8 +141,12 @@ final class ToRdf
             return null;
         }
 
+        /** @var array<string, mixed> $item */
         if (array_key_exists(Keywords::LIST, $item)) {
-            return $this->listToRdf($item[Keywords::LIST], $quads, $graph, $map);
+            /** @var JsonValue $list */
+            $list = $item[Keywords::LIST];
+
+            return $this->listToRdf(is_array($list) ? array_values($list) : [], $quads, $graph, $map);
         }
 
         if (array_key_exists(Keywords::VALUE, $item)) {
@@ -167,6 +178,7 @@ final class ToRdf
             $cells[] = new BlankNode(substr($map->issue(), 2));
         }
 
+        /** @var JsonValue $item */
         foreach ($list as $index => $item) {
             $embedded = [];
             $object = $this->objectToRdf($item, $embedded, $graph, $map);
@@ -194,6 +206,7 @@ final class ToRdf
      */
     private function valueToRdf(array $item, array &$quads, Iri|BlankNode|null $graph, NodeMap $map): Iri|BlankNode|Literal|null
     {
+        /** @var JsonValue $value */
         $value = $item[Keywords::VALUE];
         $datatype = $item[Keywords::TYPE] ?? null;
         $language = $item[Keywords::LANGUAGE] ?? null;
@@ -220,13 +233,14 @@ final class ToRdf
             $lexical = is_int($value) ? (string) $value : sprintf('%.0f', $value);
             $datatype ??= self::XSD_INTEGER;
         } else {
-            $lexical = (string) $value;
+            $lexical = is_string($value) ? $value : '';
         }
 
+        /** @var JsonValue $direction */
         $direction = $item[Keywords::DIRECTION] ?? null;
 
         if ($direction !== null && $this->rdfDirection === 'i18n-datatype') {
-            return Literal::typed($lexical, self::I18N . strtolower((string) $language) . '_' . $direction);
+            return Literal::typed($lexical, self::I18N . strtolower(is_string($language) ? $language : '') . '_' . (is_string($direction) ? $direction : ''));
         }
 
         if ($direction !== null && $this->rdfDirection === 'compound-literal') {
@@ -237,7 +251,7 @@ final class ToRdf
                 $quads[] = new Quad($node, new Iri(self::RDF_LANGUAGE), Literal::string(strtolower($language)), $graph);
             }
 
-            $quads[] = new Quad($node, new Iri(self::RDF_DIRECTION), Literal::string((string) $direction), $graph);
+            $quads[] = new Quad($node, new Iri(self::RDF_DIRECTION), Literal::string(is_string($direction) ? $direction : ''), $graph);
 
             return $node;
         }

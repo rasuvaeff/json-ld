@@ -19,6 +19,8 @@ use Rasuvaeff\JsonLd\Exception\InvalidInputException;
  * distinguishable from an empty list until {@see self::strip()}.
  *
  * @internal
+ *
+ * @psalm-import-type JsonValue from \Rasuvaeff\JsonLd\Json
  */
 final readonly class ExpansionRun
 {
@@ -75,7 +77,9 @@ final readonly class ExpansionRun
             $result = [];
             $listContainer = $definition !== null && in_array(Keywords::LIST, $definition->container, true);
 
+            /** @var JsonValue $item */
             foreach ($element as $item) {
+                /** @var JsonValue $expanded */
                 $expanded = $this->expand($context, $activeProperty, $item, $fromMap);
 
                 if ($listContainer && is_array($expanded) && array_is_list($expanded)) {
@@ -100,7 +104,7 @@ final readonly class ExpansionRun
     }
 
     /**
-     * @param array<string, mixed> $element
+     * @param array<array-key, mixed> $element
      */
     private function expandObject(
         ActiveContext $context,
@@ -113,12 +117,12 @@ final readonly class ExpansionRun
             $hasValue = false;
 
             foreach (array_keys($element) as $key) {
-                if ($this->keywordOf($context, (string) $key) === Keywords::VALUE) {
+                if ($this->keywordOf($context, strval($key)) === Keywords::VALUE) {
                     $hasValue = true;
                 }
             }
 
-            $onlyId = count($element) === 1 && $this->keywordOf($context, (string) array_key_first($element)) === Keywords::ID;
+            $onlyId = count($element) === 1 && $this->keywordOf($context, strval(array_key_first($element))) === Keywords::ID;
 
             if (!$hasValue && !$onlyId) {
                 $context = $context->previous;
@@ -147,7 +151,8 @@ final readonly class ExpansionRun
                 continue;
             }
 
-            $terms = array_filter(self::asList($element[$key]), is_string(...));
+            /** @var list<string> $terms */
+            $terms = array_values(array_filter(self::asList($element[$key]), is_string(...)));
             sort($terms);
 
             foreach ($terms as $term) {
@@ -169,6 +174,7 @@ final readonly class ExpansionRun
         foreach ($keys as $key) {
             if ($this->keywordOf($context, $key) === Keywords::TYPE) {
                 $types = self::asList($element[$key]);
+                /** @var JsonValue $last */
                 $last = $types === [] ? null : $types[array_key_last($types)];
 
                 if (is_string($last)) {
@@ -195,6 +201,7 @@ final readonly class ExpansionRun
                 throw new InvalidInputException('invalid value object');
             }
 
+            /** @var JsonValue $types */
             $types = $result[Keywords::TYPE] ?? null;
 
             if ($types === [Keywords::JSON]) {
@@ -245,7 +252,7 @@ final readonly class ExpansionRun
      * Steps 13 and 14 of the algorithm: the members of one (possibly nested)
      * map.
      *
-     * @param array<string, mixed> $element
+     * @param array<array-key, mixed> $element
      * @param array<string, mixed> $result
      */
     private function expandEntries(
@@ -258,8 +265,9 @@ final readonly class ExpansionRun
     ): void {
         $nests = [];
 
+        /** @var JsonValue $value */
         foreach ($element as $key => $value) {
-            $key = (string) $key;
+            $key = strval($key);
 
             if ($key === Keywords::CONTEXT) {
                 continue;
@@ -308,6 +316,7 @@ final readonly class ExpansionRun
             ) {
                 $expandedValue = $this->expandIndexMap($context, $key, $definition, $container, $value);
             } else {
+                /** @var JsonValue $expandedValue */
                 $expandedValue = $this->expand($context, $key, $value);
             }
 
@@ -330,8 +339,10 @@ final readonly class ExpansionRun
             }
 
             if ($definition !== null && $definition->reverse) {
+                /** @var array<string, mixed> $reverse */
                 $reverse = $result[Keywords::REVERSE] ?? [];
 
+                /** @var JsonValue $item */
                 foreach (self::asList($expandedValue) as $item) {
                     if (self::isValueObject($item) || self::isListObject($item)) {
                         throw new InvalidInputException('invalid reverse property value');
@@ -360,13 +371,14 @@ final readonly class ExpansionRun
                 );
             }
 
+            /** @var JsonValue $nested */
             foreach (self::asList($element[$nestKey]) as $nested) {
                 if (!self::isMap($nested)) {
                     throw new InvalidInputException('invalid @nest value');
                 }
 
                 foreach (array_keys($nested) as $nestedKey) {
-                    if ($this->keywordOf($context, (string) $nestedKey) === Keywords::VALUE) {
+                    if ($this->keywordOf($context, strval($nestedKey)) === Keywords::VALUE) {
                         throw new InvalidInputException('invalid @nest value');
                     }
                 }
@@ -377,6 +389,7 @@ final readonly class ExpansionRun
     }
 
     /**
+     * @param JsonValue $value
      * @param array<string, mixed> $result
      */
     private function expandKeywordEntry(
@@ -419,7 +432,9 @@ final readonly class ExpansionRun
                     throw new InvalidInputException('invalid type value');
                 }
 
-                $result[Keywords::TYPE] = [...($result[Keywords::TYPE] ?? []), ...$types];
+                /** @var list<mixed> $knownTypes */
+                $knownTypes = $result[Keywords::TYPE] ?? [];
+                $result[Keywords::TYPE] = [...$knownTypes, ...$types];
 
                 return;
 
@@ -437,7 +452,9 @@ final readonly class ExpansionRun
                     }
                 }
 
-                $result[Keywords::INCLUDED] = [...($result[Keywords::INCLUDED] ?? []), ...$included];
+                /** @var list<mixed> $knownIncluded */
+                $knownIncluded = $result[Keywords::INCLUDED] ?? [];
+                $result[Keywords::INCLUDED] = [...$knownIncluded, ...$included];
 
                 return;
 
@@ -487,6 +504,7 @@ final readonly class ExpansionRun
                 return;
 
             case Keywords::SET:
+                /** @var JsonValue $expanded */
                 $expanded = $this->expand($context, $activeProperty, $value);
 
                 if ($expanded !== null) {
@@ -500,29 +518,33 @@ final readonly class ExpansionRun
                     throw new InvalidInputException('invalid @reverse value');
                 }
 
+                /** @var JsonValue $expanded */
                 $expanded = $this->expand($context, Keywords::REVERSE, $value);
 
                 if (!self::isMap($expanded) || array_key_exists(self::EMPTY, $expanded)) {
                     return;
                 }
 
+                /** @var JsonValue $items */
                 foreach ($expanded as $property => $items) {
                     if ($property === Keywords::REVERSE) {
-                        foreach ($items as $reverseProperty => $reverseItems) {
-                            self::append($result, (string) $reverseProperty, $reverseItems);
+                        foreach (self::asMap($items) as $reverseProperty => $reverseItems) {
+                            self::append($result, strval($reverseProperty), $reverseItems);
                         }
 
                         continue;
                     }
 
+                    /** @var JsonValue $item */
                     foreach (self::asList($items) as $item) {
                         if (self::isValueObject($item) || self::isListObject($item)) {
                             throw new InvalidInputException('invalid reverse property value');
                         }
                     }
 
+                    /** @var array<string, mixed> $reverse */
                     $reverse = $result[Keywords::REVERSE] ?? [];
-                    self::append($reverse, (string) $property, $items);
+                    self::append($reverse, strval($property), $items);
                     $result[Keywords::REVERSE] = $reverse;
                 }
 
@@ -543,10 +565,12 @@ final readonly class ExpansionRun
         $direction = $definition !== null && $definition->hasDirection ? $definition->direction : $context->direction;
         $result = [];
 
+        /** @var JsonValue $items */
         foreach ($value as $language => $items) {
-            $language = (string) $language;
+            $language = strval($language);
             $none = $this->processor->expandIri($context, $language, vocab: true) === Keywords::NONE;
 
+            /** @var JsonValue $item */
             foreach (self::asList($items) as $item) {
                 if ($item === null) {
                     continue;
@@ -589,8 +613,9 @@ final readonly class ExpansionRun
         $result = [];
         $indexKey = $definition->index ?? Keywords::INDEX;
 
+        /** @var JsonValue $indexValue */
         foreach ($value as $index => $indexValue) {
-            $index = (string) $index;
+            $index = strval($index);
             $mapContext = $context;
 
             if (in_array(Keywords::TYPE, $container, true)) {
@@ -609,6 +634,7 @@ final readonly class ExpansionRun
             $expandedIndex = $this->processor->expandIri($mapContext, $index, vocab: true);
             $items = self::asList($this->expand($mapContext, $key, self::asList($indexValue), true));
 
+            /** @var JsonValue $item */
             foreach ($items as $item) {
                 if (!self::isMap($item)) {
                     $result[] = $item;
@@ -700,7 +726,7 @@ final readonly class ExpansionRun
     }
 
     /**
-     * @return list<mixed>
+     * @return list<JsonValue>
      */
     private static function asList(mixed $value): array
     {
@@ -708,19 +734,37 @@ final readonly class ExpansionRun
             return [];
         }
 
-        return is_array($value) && array_is_list($value) ? $value : [$value];
+        /** @var list<JsonValue> $list */
+        $list = is_array($value) && array_is_list($value) ? $value : [$value];
+
+        return $list;
     }
 
     /**
      * @param array<string, mixed> $map
+     * @param JsonValue $value
      */
     private static function append(array &$map, string $property, mixed $value): void
     {
-        $map[$property] ??= [];
+        /** @var list<JsonValue> $values */
+        $values = $map[$property] ?? [];
 
         foreach (self::asList($value) as $item) {
-            $map[$property][] = $item;
+            $values[] = $item;
         }
+
+        $map[$property] = $values;
+    }
+
+    /**
+     * @return array<array-key, JsonValue>
+     */
+    private static function asMap(mixed $value): array
+    {
+        /** @var array<array-key, JsonValue> $map */
+        $map = is_array($value) ? $value : [];
+
+        return $map;
     }
 
     /**

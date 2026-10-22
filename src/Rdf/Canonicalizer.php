@@ -34,7 +34,7 @@ final class Canonicalizer
             }
         }
 
-        $colors = array_map(static fn(): string => '', $labels);
+        $colors = array_fill_keys(array_keys($labels), '');
 
         return self::resolve($rows, $colors);
     }
@@ -50,7 +50,7 @@ final class Canonicalizer
         $classes = [];
 
         foreach ($colors as $label => $color) {
-            $classes[$color][] = (string) $label;
+            $classes[$color][] = strval($label);
         }
 
         $tied = array_filter($classes, static fn(array $members): bool => count($members) > 1);
@@ -71,19 +71,17 @@ final class Canonicalizer
         uasort($tied, static fn(array $left, array $right): int => count($left) <=> count($right));
         $members = $tied[array_key_first($tied)];
 
-        $best = null;
+        $candidates = [];
 
         foreach ($members as $member) {
             $branch = $colors;
             $branch[$member] = hash('sha256', $colors[$member] . '|individualized');
-            $candidate = self::resolve($rows, $branch);
-
-            if ($best === null || strcmp($candidate, $best) < 0) {
-                $best = $candidate;
-            }
+            $candidates[] = self::resolve($rows, $branch);
         }
 
-        return (string) $best;
+        sort($candidates, SORT_STRING);
+
+        return $candidates[0];
     }
 
     /**
@@ -97,7 +95,7 @@ final class Canonicalizer
         $classCount = count(array_unique($colors));
 
         for ($round = 0; $round <= count($colors); $round++) {
-            $signatures = array_map(static fn(): array => [], $colors);
+            $signatures = array_fill_keys(array_keys($colors), []);
 
             foreach ($rows as $row) {
                 foreach ($row as $position => $term) {

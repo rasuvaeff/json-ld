@@ -16,6 +16,8 @@ use Rasuvaeff\JsonLd\Exception\JsonLdException;
  * code from the W3C test suite.
  *
  * @api
+ *
+ * @psalm-import-type JsonValue from \Rasuvaeff\JsonLd\Json
  */
 final class Expander
 {
@@ -65,20 +67,24 @@ final class Expander
         $context = new ActiveContext(base: $base, originalBase: $base);
 
         if ($options->expandContext !== null) {
+            /** @var JsonValue $expandContext */
             $expandContext = $options->expandContext;
 
             if (is_array($expandContext) && !array_is_list($expandContext) && array_key_exists(Keywords::CONTEXT, $expandContext)) {
+                /** @var JsonValue $expandContext */
                 $expandContext = $expandContext[Keywords::CONTEXT];
             }
 
             $context = $processor->process($context, $expandContext, $baseUrl);
         }
 
+        /** @var JsonValue $expanded */
         $expanded = (new ExpansionRun($processor, $baseUrl))->expand($context, null, $input);
         if (is_array($expanded) && !array_is_list($expanded)
             && count($expanded) === 1
             && array_key_exists(Keywords::GRAPH, $expanded)
         ) {
+            /** @var JsonValue $expanded */
             $expanded = $expanded[Keywords::GRAPH];
         }
 

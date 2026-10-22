@@ -13,6 +13,8 @@ use Rasuvaeff\JsonLd\Exception\InvalidInputException;
  * order the algorithm meets them.
  *
  * @internal
+ *
+ * @psalm-import-type JsonValue from \Rasuvaeff\JsonLd\Json
  */
 final class NodeMap
 {
@@ -56,7 +58,7 @@ final class NodeMap
 
     /**
      * @param array<string, mixed>|string|null $activeSubject a subject id, a reference map for a reverse property, or null
-     * @param array<string, list<mixed>>|null $list the list object being filled
+     * @param array<string, list<JsonValue>>|null $list the list object being filled
      */
     public function generate(
         mixed $element,
@@ -65,15 +67,16 @@ final class NodeMap
         ?string $activeProperty = null,
         ?array &$list = null,
     ): void {
-        if (is_array($element) && array_is_list($element)) {
+        if (!is_array($element)) {
+            return;
+        }
+
+        if (array_is_list($element)) {
+            /** @var mixed $item */
             foreach ($element as $item) {
                 $this->generate($item, $activeGraph, $activeSubject, $activeProperty, $list);
             }
 
-            return;
-        }
-
-        if (!is_array($element)) {
             return;
         }
 
@@ -91,7 +94,7 @@ final class NodeMap
         if (array_key_exists(Keywords::VALUE, $element)) {
             if ($list === null) {
                 if (is_string($activeSubject) && $activeProperty !== null) {
-                    $this->addUnique($activeGraph, $activeSubject, $activeProperty, $element);
+                    $this->add($activeGraph, $activeSubject, $activeProperty, $element, unique: true);
                 }
             } else {
                 $list[Keywords::LIST][] = $element;
@@ -106,8 +109,7 @@ final class NodeMap
 
             if ($list === null) {
                 if (is_string($activeSubject) && $activeProperty !== null) {
-                    $this->graphs[$activeGraph][$activeSubject][$activeProperty] ??= [];
-                    $this->graphs[$activeGraph][$activeSubject][$activeProperty][] = $result;
+                    $this->add($activeGraph, $activeSubject, $activeProperty, $result, unique: false);
                 }
             } else {
                 $list[Keywords::LIST][] = $result;
@@ -124,32 +126,28 @@ final class NodeMap
         } else {
             $id = $this->issue();
         }
+
         unset($element[Keywords::ID]);
 
         $this->graphs[$activeGraph][$id] ??= [Keywords::ID => $id];
 
         if (is_array($activeSubject)) {
-            $this->graphs[$activeGraph][$id][$activeProperty ?? ''] ??= [];
-
-            if (!self::contains($this->graphs[$activeGraph][$id][$activeProperty ?? ''], $activeSubject)) {
-                $this->graphs[$activeGraph][$id][$activeProperty ?? ''][] = $activeSubject;
-            }
+            $this->add($activeGraph, $id, $activeProperty ?? '', $activeSubject, unique: true);
         } elseif ($activeProperty !== null && $activeSubject !== null) {
             $reference = [Keywords::ID => $id];
 
             if ($list === null) {
-                $this->addUnique($activeGraph, $activeSubject, $activeProperty, $reference);
+                $this->add($activeGraph, $activeSubject, $activeProperty, $reference, unique: true);
             } else {
                 $list[Keywords::LIST][] = $reference;
             }
         }
 
         if (array_key_exists(Keywords::TYPE, $element)) {
-            $this->graphs[$activeGraph][$id][Keywords::TYPE] ??= [];
-
-            foreach ((array) $element[Keywords::TYPE] as $type) {
-                if (!in_array($type, $this->graphs[$activeGraph][$id][Keywords::TYPE], true)) {
-                    $this->graphs[$activeGraph][$id][Keywords::TYPE][] = $type;
+            /** @var JsonValue $type */
+            foreach (is_array($element[Keywords::TYPE]) ? $element[Keywords::TYPE] : [$element[Keywords::TYPE]] as $type) {
+                if (is_string($type)) {
+                    $this->add($activeGraph, $id, Keywords::TYPE, $type, unique: true);
                 }
             }
 
@@ -157,6 +155,7 @@ final class NodeMap
         }
 
         if (array_key_exists(Keywords::INDEX, $element)) {
+            /** @var JsonValue $existing */
             $existing = $this->graphs[$activeGraph][$id][Keywords::INDEX] ?? null;
 
             if ($existing !== null && $existing !== $element[Keywords::INDEX]) {
@@ -167,12 +166,14 @@ final class NodeMap
             unset($element[Keywords::INDEX]);
         }
 
-        if (array_key_exists(Keywords::REVERSE, $element)) {
+        if (array_key_exists(Keywords::REVERSE, $element) && is_array($element[Keywords::REVERSE])) {
             $reference = [Keywords::ID => $id];
 
+            /** @var JsonValue $values */
             foreach ($element[Keywords::REVERSE] as $property => $values) {
-                foreach ($values as $value) {
-                    $this->generate($value, $activeGraph, $reference, (string) $property);
+                /** @var JsonValue $value */
+                foreach (is_array($values) ? $values : [] as $value) {
+                    $this->generate($value, $activeGraph, $reference, strval($property));
                 }
             }
 
@@ -202,19 +203,26 @@ final class NodeMap
     }
 
     /**
-     * @param array<string, mixed> $value
+     * Appends a value to the property of a node, optionally only when an
+     * equal value is not there yet.
+     *
+     * @param JsonValue $value
      */
-    private function addUnique(string $graph, string $subject, string $property, array $value): void
+    private function add(string $graph, string $subject, string $property, mixed $value, bool $unique): void
     {
-        $this->graphs[$graph][$subject][$property] ??= [];
+        /** @var list<JsonValue> $values */
+        $values = $this->graphs[$graph][$subject][$property] ?? [];
 
-        if (!self::contains($this->graphs[$graph][$subject][$property], $value)) {
-            $this->graphs[$graph][$subject][$property][] = $value;
+        if (!$unique || !self::contains($values, $value)) {
+            $values[] = $value;
         }
+
+        $this->graphs[$graph][$subject][$property] = $values;
     }
 
     /**
-     * @param list<mixed> $haystack
+     * @param list<JsonValue> $haystack
+     * @param JsonValue $needle
      */
     private static function contains(array $haystack, mixed $needle): bool
     {
@@ -237,6 +245,7 @@ final class NodeMap
             return false;
         }
 
+        /** @var JsonValue $value */
         foreach ($left as $key => $value) {
             if (!array_key_exists($key, $right) || !self::sameJson($value, $right[$key])) {
                 return false;

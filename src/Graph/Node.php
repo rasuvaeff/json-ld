@@ -9,11 +9,13 @@ namespace Rasuvaeff\JsonLd\Graph;
  * object, with accessors for values and references to other nodes.
  *
  * @api
+ *
+ * @psalm-import-type JsonValue from \Rasuvaeff\JsonLd\Json
  */
 final readonly class Node
 {
     /**
-     * @param array<string, mixed> $expanded the expanded node object
+     * @param array<array-key, mixed> $expanded the expanded node object
      * @param Graph $graph the graph the node belongs to, for reference resolution
      */
     public function __construct(
@@ -23,6 +25,7 @@ final readonly class Node
 
     public function id(): ?string
     {
+        /** @var JsonValue $id */
         $id = $this->expanded['@id'] ?? null;
 
         return is_string($id) ? $id : null;
@@ -33,13 +36,25 @@ final readonly class Node
      */
     public function types(): array
     {
+        /** @var JsonValue $types */
         $types = $this->expanded['@type'] ?? [];
 
         if (is_string($types)) {
             return [$types];
         }
 
-        return is_array($types) ? array_values($types) : [];
+        $result = [];
+
+        if (is_array($types)) {
+            /** @var JsonValue $type */
+            foreach ($types as $type) {
+                if (is_string($type)) {
+                    $result[] = $type;
+                }
+            }
+        }
+
+        return $result;
     }
 
     public function hasType(string $iri): bool
@@ -54,14 +69,16 @@ final readonly class Node
      */
     public function properties(): array
     {
+        /** @var array<string, list<mixed>> $result */
         $result = [];
 
+        /** @var JsonValue $value */
         foreach ($this->expanded as $key => $value) {
             if ($key === '@id' || $key === '@type') {
                 continue;
             }
 
-            $result[$key] = is_array($value) && array_is_list($value) ? $value : [$value];
+            $result[strval($key)] = is_array($value) && array_is_list($value) ? $value : [$value];
         }
 
         return $result;
@@ -77,8 +94,10 @@ final readonly class Node
     {
         $result = [];
 
+        /** @var JsonValue $value */
         foreach ($this->expanded[$property] ?? [] as $value) {
             if (is_array($value) && !array_is_list($value) && array_key_exists('@value', $value)) {
+                /** @var JsonValue $inner */
                 $inner = $value['@value'];
 
                 if (is_scalar($inner)) {
@@ -110,6 +129,7 @@ final readonly class Node
     {
         $result = [];
 
+        /** @var JsonValue $value */
         foreach ($this->expanded[$property] ?? [] as $value) {
             if (is_array($value) && !array_is_list($value) && isset($value['@id']) && is_string($value['@id'])) {
                 $node = $this->graph->node($value['@id']);
@@ -135,6 +155,9 @@ final readonly class Node
      */
     public function toArray(): array
     {
-        return $this->expanded;
+        /** @var array<string, mixed> $expanded */
+        $expanded = $this->expanded;
+
+        return $expanded;
     }
 }

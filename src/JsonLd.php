@@ -39,7 +39,7 @@ final class JsonLd
      *
      * @param string|array<mixed> $input
      *
-     * @return array<string, mixed>
+     * @return list<array<string, mixed>>
      */
     public static function flatten(string|array $input, ?ExpandOptions $options = null): array
     {

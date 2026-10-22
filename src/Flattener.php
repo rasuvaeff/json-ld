@@ -35,16 +35,18 @@ final class Flattener
         ksort($graphs, SORT_STRING);
 
         foreach ($graphs as $name => $graph) {
-            $name = (string) $name;
+            $name = strval($name);
             $default[$name] ??= [Keywords::ID => $name];
-            $default[$name][Keywords::GRAPH] = [];
             ksort($graph, SORT_STRING);
+            $entries = [];
 
             foreach ($graph as $node) {
                 if (count($node) > 1) {
-                    $default[$name][Keywords::GRAPH][] = $node;
+                    $entries[] = $node;
                 }
             }
+
+            $default[$name][Keywords::GRAPH] = $entries;
         }
 
         ksort($default, SORT_STRING);

@@ -45,8 +45,8 @@ final class JsonCanonicalizer
         usort(
             $keys,
             static fn(string $left, string $right): int => strcmp(
-                mb_convert_encoding($left, 'UTF-16BE', 'UTF-8'),
-                mb_convert_encoding($right, 'UTF-16BE', 'UTF-8'),
+                (string) mb_convert_encoding($left, 'UTF-16BE', 'UTF-8'),
+                (string) mb_convert_encoding($right, 'UTF-16BE', 'UTF-8'),
             ),
         );
 
