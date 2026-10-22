@@ -143,7 +143,7 @@ final class IriTest
     /** @return iterable<string, array{string}> */
     public static function absoluteReferenceKeepsIdentityExamples(): iterable
     {
-        yield 'http' => ['http://example.com/a/../b', 'https://base/x'];
+        yield 'http' => ['http://example.com/a/b', 'https://base/x'];
         yield 'urn' => ['urn:isbn:0451450523', 'http://base/'];
         yield 'with query and fragment' => ['http://x/y?z#w', 'http://b/'];
     }
@@ -168,8 +168,8 @@ final class IriTest
         ]);
 
         $path = Gen::map(
-            static fn(array $parts): string => implode('/', $parts),
             Gen::nonEmptyArrayOf($segments, maxSize: 4),
+            static fn(array $parts): string => implode('/', $parts),
         );
 
         return [

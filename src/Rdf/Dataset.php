@@ -30,53 +30,18 @@ final readonly class Dataset
 
     /**
      * Two datasets are equal when they hold the same quads, regardless of
-     * order and of blank node label choice (blank nodes match up to
-     * renaming — alpha equivalence).
+     * order and of blank node labels (isomorphism).
      */
     public function equals(self $other): bool
     {
-        return $this->canonicalHash() === $other->canonicalHash();
+        return Canonicalizer::canonicalize($this) === Canonicalizer::canonicalize($other);
     }
 
     /**
-     * Order- and blank-label-independent hash of the quads: every line is
-     * canonicalized by replacing blank node labels with their sorted
-     * connectivity signature, then the sorted lines are hashed.
+     * Order- and blank-label-independent hash of the dataset.
      */
     public function canonicalHash(): string
     {
-        $lines = [];
-
-        foreach ($this->quads as $quad) {
-            $lines[] = implode(' ', [
-                self::term($quad->subject),
-                self::term($quad->predicate),
-                self::term($quad->object),
-                $quad->graph === null ? '' : self::term($quad->graph),
-            ]);
-        }
-
-        sort($lines);
-
-        return hash('sha256', implode("\n", $lines));
-    }
-
-    private static function term(Iri|BlankNode|Literal $term): string
-    {
-        if ($term instanceof Iri) {
-            return '<' . $term->value . '>';
-        }
-
-        if ($term instanceof BlankNode) {
-            return '_:' . $term->id;
-        }
-
-        $result = '"' . addslashes($term->value) . '"';
-
-        if ($term->language !== null) {
-            return $result . '@' . $term->language;
-        }
-
-        return $result . '^^<' . ($term->datatype ?? Literal::XSD_STRING) . '>';
+        return hash('sha256', Canonicalizer::canonicalize($this));
     }
 }

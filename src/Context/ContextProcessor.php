@@ -449,6 +449,10 @@ final readonly class ContextProcessor
             }
         }
 
+        $reverse = false;
+        $reverseContainer = [];
+        $iri = null;
+
         if (array_key_exists('@reverse', $value)) {
             if (array_key_exists('@id', $value) || array_key_exists('@nest', $value)) {
                 throw new InvalidContextException('invalid reverse property');
@@ -484,22 +488,17 @@ final readonly class ContextProcessor
                 $container = [$containerValue];
             }
 
-            $this->define($active, $term, new TermDefinition(
-                iri: $iri,
-                protected: $protected,
-                reverse: true,
-                container: $container,
-                type: $type,
-            ), $previous, $scope);
-
-            return;
+            $reverse = true;
+            $reverseContainer = $container;
         }
 
-        $iri = null;
+        $iri ??= null;
         $prefix = false;
         $hasColon = preg_match('~.:.~s', $term) === 1;
 
-        if (array_key_exists('@id', $value) && $value['@id'] !== $term) {
+        if ($reverse) {
+            // The reverse IRI mapping is already set.
+        } elseif (array_key_exists('@id', $value) && $value['@id'] !== $term) {
             $id = $value['@id'];
 
             if ($id !== null) {
@@ -567,9 +566,9 @@ final readonly class ContextProcessor
             throw new InvalidContextException('invalid IRI mapping');
         }
 
-        $container = [];
+        $container = $reverseContainer;
 
-        if (array_key_exists('@container', $value)) {
+        if (!$reverse && array_key_exists('@container', $value)) {
             $container = $this->containerMapping($value['@container']);
 
             if (in_array('@type', $container, true)) {
@@ -685,6 +684,7 @@ final readonly class ContextProcessor
             iri: $iri,
             prefix: $prefix,
             protected: $protected,
+            reverse: $reverse,
             container: $container,
             index: $index,
             hasLanguage: $hasLanguage,

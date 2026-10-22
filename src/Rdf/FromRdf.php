@@ -4,13 +4,18 @@ declare(strict_types=1);
 
 namespace Rasuvaeff\JsonLd\Rdf;
 
-use Rasuvaeff\JsonLd\Json;
+use ArrayObject;
+use JsonException;
+use Rasuvaeff\JsonLd\Context\Syntax;
+use Rasuvaeff\JsonLd\Exception\InvalidInputException;
 use Rasuvaeff\JsonLd\Keywords;
 
 /**
- * RDF deserialization into expanded JSON-LD, JSON-LD 1.1 API section 5.3
- * ("serialize RDF as JSON-LD"): rebuilds node objects from quads, detects
- * rdf:first/rdf:rest chains back into `@list`, and wraps named graphs.
+ * Serialization of RDF as JSON-LD, JSON-LD 1.1 API section 8.2: rebuilds
+ * node objects from quads, restores well-formed rdf:first/rdf:rest chains
+ * into `@list` and wraps named graphs.
+ *
+ * The result is a document in expanded form.
  *
  * @api
  */
@@ -22,319 +27,362 @@ final class FromRdf
 
     private const string XSD_DOUBLE = 'http://www.w3.org/2001/XMLSchema#double';
 
+    private const string RDF_LIST = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#List';
+
+    private const string RDF_VALUE = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#value';
+
+    private const string RDF_LANGUAGE = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#language';
+
+    private const string RDF_DIRECTION = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#direction';
+
+    /**
+     * @param string|null $rdfDirection `i18n-datatype`, `compound-literal` or null
+     */
     public function __construct(
         private readonly bool $useNativeTypes = false,
         private readonly bool $useRdfType = false,
+        private readonly ?string $rdfDirection = null,
     ) {}
 
     /**
      * @return list<mixed> expanded JSON-LD document
+     *
+     * @throws InvalidInputException `invalid JSON literal` for an rdf:JSON literal that is not JSON
      */
     public function fromRdf(Dataset $dataset): array
     {
-        /** @var array<string, list<Quad>> $byGraph quads grouped by graph name */
-        $byGraph = [];
+        /** @var array<string, array<string, array<string, mixed>>> $graphMap graph => subject => node */
+        $graphMap = [Keywords::DEFAULT_GRAPH => []];
+        /** @var array<string, array<string, list<array{subject: string, property: string, slot: ArrayObject<string, mixed>}>>> $usages */
+        $usages = [];
+        /** @var array<string, array<string, true>> $compoundSubjects */
+        $compoundSubjects = [];
 
         foreach ($dataset->quads as $quad) {
-            $byGraph[self::graphKey($quad)][] = $quad;
-        }
+            $name = $quad->graph === null ? Keywords::DEFAULT_GRAPH : self::id($quad->graph);
 
-        $result = [];
+            $graphMap[$name] ??= [];
 
-        foreach ($byGraph as $graphKey => $quads) {
-            $nodes = $this->graphNodes($quads);
-
-            if ($graphKey === '@default') {
-                $result = [...$result, ...$nodes];
-            } else {
-                $result[] = [
-                    Keywords::ID => $graphKey,
-                    Keywords::GRAPH => $nodes,
-                ];
-            }
-        }
-
-        return $result;
-    }
-
-    /**
-     * Walks an rdf:first/rdf:rest chain from its head cell.
-     *
-     * @param array<string, array{first: mixed, rest: ?string}> $cells every list cell keyed by subject
-     *
-     * @return list<mixed>
-     */
-    private function buildList(string $head, array $cells): ?array
-    {
-        $items = [];
-        $current = $head;
-        $visited = [];
-
-        while ($current !== Literal::RDF_NIL) {
-            if (isset($visited[$current])) {
-                // A cycle: this is not a well-formed list.
-                return null;
+            if ($name !== Keywords::DEFAULT_GRAPH) {
+                $graphMap[Keywords::DEFAULT_GRAPH][$name] ??= [Keywords::ID => $name];
             }
 
-            $visited[$current] = true;
+            $subject = self::id($quad->subject);
+            $graphMap[$name][$subject] ??= [Keywords::ID => $subject];
 
-            $entry = $cells[$current] ?? null;
-
-            if ($entry === null) {
-                return null;
-            }
-
-            $items[] = $entry['first'];
-            $current = $entry['rest'];
-        }
-
-        return $items;
-    }
-
-    /**
-     * @param list<Quad> $quads
-     *
-     * @return list<array<string, mixed>>
-     */
-    private function graphNodes(array $quads): array
-    {
-        $cells = $this->listCells($quads);
-
-        /** @var array<string, true> $restTargets */
-        $restTargets = [];
-
-        foreach ($quads as $quad) {
-            if ($quad->predicate->value === Literal::RDF_REST) {
-                $restTargets[self::termKey($quad->object)] = true;
-            }
-        }
-
-        // Well-formed lists: every cell of a valid chain is consumed by it.
-        $heads = [];
-        $consumed = [];
-
-        foreach ($cells as $subjectKey => $cell) {
-            if (isset($restTargets[$subjectKey])) {
-                continue;
-            }
-
-            $list = $this->buildList($subjectKey, $cells);
-
-            if ($list !== null) {
-                $heads[$subjectKey] = $list;
-
-                $current = $subjectKey;
-
-                while ($current !== Literal::RDF_NIL && isset($cells[$current])) {
-                    $consumed[$current] = true;
-                    $current = $cells[$current]['rest'];
-                }
-            }
-        }
-
-        /** @var array<string, true> $firstRefs subjects referenced through rdf:first */
-        $firstRefs = [];
-
-        foreach ($quads as $quad) {
-            if ($quad->predicate->value === Literal::RDF_FIRST) {
-                $firstRefs[self::termKey($quad->object)] = true;
-            }
-        }
-
-        /** @var array<string, array<string, list<array<string, mixed>>>> $bySubject */
-        $bySubject = [];
-
-        foreach ($quads as $quad) {
-            $subjectKey = self::termKey($quad->subject);
-            $predicate = $quad->predicate->value;
-
-            if (($predicate === Literal::RDF_FIRST || $predicate === Literal::RDF_REST)
-                && isset($consumed[$subjectKey])
-                && !isset($firstRefs[$subjectKey])
-            ) {
-                continue;
-            }
-
-            foreach ($this->predicateValues($quad, $cells, $restTargets, $heads) as $predicate => $value) {
-                $bySubject[$subjectKey][$predicate][] = $value;
-            }
-        }
-
-        $nodes = [];
-
-        foreach ($bySubject as $subjectKey => $properties) {
-            $node = [];
-
-            if (!str_starts_with($subjectKey, '_:')) {
-                $node[Keywords::ID] = $subjectKey;
-            }
-
-            foreach ($properties as $predicate => $values) {
-                $node[$predicate] = $values;
-            }
-
-            $nodes[] = $node;
-        }
-
-        return $nodes;
-    }
-
-    /**
-     * @param array<string, array{first: mixed, rest: ?string}> $cells
-     * @param array<string, true> $restTargets
-     *
-     * @return array<string, mixed> property => value entry
-     */
-    private function predicateValues(Quad $quad, array $cells, array $restTargets, array $heads): array
-    {
-        $predicate = $quad->predicate->value;
-
-        if ($predicate === Literal::RDF_TYPE) {
             $object = $quad->object;
 
-            if ($object instanceof Iri) {
-                if ($this->useRdfType) {
-                    return [$predicate => [Keywords::ID => $object->value]];
+            if (!$object instanceof Literal) {
+                $objectId = self::id($object);
+                $graphMap[$name][$objectId] ??= [Keywords::ID => $objectId];
+            }
+
+            $property = $quad->predicate->value;
+
+            if ($this->rdfDirection === 'compound-literal' && $property === self::RDF_DIRECTION) {
+                $compoundSubjects[$name][$subject] = true;
+            }
+
+            if ($property === Literal::RDF_TYPE && !$this->useRdfType && !$object instanceof Literal) {
+                $types = $graphMap[$name][$subject][Keywords::TYPE] ?? [];
+                $objectId = self::id($object);
+
+                if (!in_array($objectId, $types, true)) {
+                    $types[] = $objectId;
                 }
 
-                return [Keywords::TYPE => $object->value];
-            }
+                $graphMap[$name][$subject][Keywords::TYPE] = $types;
 
-            return [];
-        }
-
-        if ($predicate === Literal::RDF_FIRST || $predicate === Literal::RDF_REST) {
-            return [];
-        }
-
-        $objectKey = self::termKey($quad->object);
-
-        if (isset($heads[$objectKey])) {
-            return [$predicate => [Keywords::LIST => $heads[$objectKey]]];
-        }
-
-        return [$predicate => $this->objectValue($quad->object)];
-    }
-
-    /**
-     * Every rdf:first/rdf:rest cell keyed by subject, with the first/rest
-     * values already converted.
-     *
-     * @param list<Quad> $quads
-     *
-     * @return array<string, array{first: mixed, rest: ?string}>
-     */
-    private function listCells(array $quads): array
-    {
-        /** @var array<string, array<string, Quad>> $chains */
-        $chains = [];
-
-        foreach ($quads as $quad) {
-            if ($quad->predicate->value === Literal::RDF_FIRST || $quad->predicate->value === Literal::RDF_REST) {
-                $chains[self::termKey($quad->subject)][$quad->predicate->value] = $quad;
-            }
-        }
-
-        $cells = [];
-
-        foreach ($chains as $subjectKey => $chain) {
-            $first = $chain[Literal::RDF_FIRST] ?? null;
-            $rest = $chain[Literal::RDF_REST] ?? null;
-
-            if ($first === null || $rest === null) {
                 continue;
             }
 
-            $cells[$subjectKey] = [
-                'first' => $this->objectValue($first->object),
-                'rest' => self::termKey($rest->object),
-            ];
-        }
+            $value = new ArrayObject($this->objectToValue($object));
 
-        return $cells;
-    }
+            $values = $graphMap[$name][$subject][$property] ?? [];
+            $index = false;
 
-    /**
-     * @return array<string, mixed>
-     */
-    private function objectValue(Iri|BlankNode|Literal $object): array
-    {
-        if ($object instanceof Iri) {
-            return [Keywords::ID => $object->value];
-        }
+            foreach ($values as $position => $existing) {
+                if ($existing->getArrayCopy() === $value->getArrayCopy()) {
+                    $index = $position;
 
-        if ($object instanceof BlankNode) {
-            return [Keywords::ID => '_:' . $object->id];
-        }
-
-        $result = [Keywords::VALUE => $object->value];
-
-        if ($object->language !== null) {
-            $result[Keywords::LANGUAGE] = $object->language;
-
-            return $result;
-        }
-
-        $datatype = $object->datatype ?? Literal::XSD_STRING;
-
-        if ($datatype === Literal::RDF_JSON) {
-            $decoded = Json::decode($object->value);
-
-            return [Keywords::VALUE => $decoded, Keywords::TYPE => Keywords::JSON];
-        }
-
-        if ($this->useNativeTypes) {
-            $native = $this->native($object->value, $datatype);
-
-            if ($native !== null) {
-                $result[Keywords::VALUE] = $native;
-
-                if ($datatype === Literal::XSD_STRING) {
-                    return $result;
+                    break;
                 }
+            }
 
-                $result[Keywords::TYPE] = $datatype;
+            $isNew = $index === false;
 
-                return $result;
+            if ($isNew) {
+                $values[] = $value;
+                $index = count($values) - 1;
+            }
+
+            $graphMap[$name][$subject][$property] = $values;
+
+            if (!$object instanceof Literal) {
+                $objectId = self::id($object);
+
+                if ($isNew && (Syntax::isBlankNodeId($objectId) || $objectId === Literal::RDF_NIL)) {
+                    $usages[$name][$objectId][] = ['subject' => $subject, 'property' => $property, 'slot' => $value];
+                }
             }
         }
 
-        if ($datatype !== Literal::XSD_STRING) {
-            $result[Keywords::TYPE] = $datatype;
+        /** @var array<string, int> $usageTotals */
+        $usageTotals = [];
+
+        foreach ($usages as $graphUsages) {
+            foreach ($graphUsages as $id => $nodeUsages) {
+                $usageTotals[$id] = ($usageTotals[$id] ?? 0) + count($nodeUsages);
+            }
+        }
+
+        foreach ($graphMap as $name => &$graph) {
+            $this->collapseLists($graph, $usages[$name] ?? [], $usageTotals);
+            $this->collapseCompoundLiterals($graph, $usages[$name] ?? [], $compoundSubjects[$name] ?? []);
+        }
+
+        unset($graph);
+
+        $default = $graphMap[Keywords::DEFAULT_GRAPH];
+        unset($graphMap[Keywords::DEFAULT_GRAPH]);
+
+        foreach ($graphMap as $name => $graph) {
+            ksort($graph, SORT_STRING);
+            $entries = [];
+
+            foreach ($graph as $node) {
+                if (count($node) > 1) {
+                    $entries[] = $node;
+                }
+            }
+
+            $default[(string) $name][Keywords::GRAPH] = $entries;
+        }
+
+        ksort($default, SORT_STRING);
+        $result = [];
+
+        foreach ($default as $node) {
+            if (count($node) > 1) {
+                $result[] = $node;
+            }
+        }
+
+        /** @var list<mixed> */
+        return self::finish($result);
+    }
+
+    /**
+     * Value objects are shared handles while the graph is being built, so
+     * that a list head replaced later is seen by every list holding it.
+     */
+    private static function finish(mixed $value): mixed
+    {
+        if ($value instanceof ArrayObject) {
+            $value = $value->getArrayCopy();
+        }
+
+        return is_array($value) ? array_map(self::finish(...), $value) : $value;
+    }
+
+    /**
+     * Replaces well-formed rdf:first/rdf:rest chains with list objects.
+     *
+     * @param array<string, array<string, mixed>> $graph
+     * @param array<string, list<array{subject: string, property: string, slot: ArrayObject<string, mixed>}>> $usages
+     * @param array<string, int> $usageTotals usages of every node across all graphs
+     */
+    private function collapseLists(array &$graph, array $usages, array $usageTotals): void
+    {
+        foreach ($usages[Literal::RDF_NIL] ?? [] as $usage) {
+            $node = $usage['subject'];
+            $property = $usage['property'];
+            $head = $usage['slot'];
+
+            $list = [];
+            $listNodes = [];
+
+            while ($property === Literal::RDF_REST
+                && Syntax::isBlankNodeId($node)
+                && $this->isWellFormedListNode($graph[$node] ?? [], $usages[$node] ?? [], $usageTotals[$node] ?? 0)
+            ) {
+                $listNode = $graph[$node];
+                array_unshift($list, $listNode[Literal::RDF_FIRST][0]);
+                array_unshift($listNodes, $node);
+
+                $usage = $usages[$node][0];
+                $node = $usage['subject'];
+                $property = $usage['property'];
+                $head = $usage['slot'];
+            }
+
+            $head->exchangeArray([Keywords::LIST => $list]);
+
+            foreach ($listNodes as $listNodeId) {
+                unset($graph[$listNodeId]);
+            }
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $node
+     * @param list<array{subject: string, property: string, slot: ArrayObject<string, mixed>}> $usages
+     */
+    private function isWellFormedListNode(array $node, array $usages, int $total): bool
+    {
+        if (count($usages) !== 1 || $total !== 1) {
+            return false;
+        }
+
+        if (!isset($node[Literal::RDF_FIRST], $node[Literal::RDF_REST])
+            || count($node[Literal::RDF_FIRST]) !== 1
+            || count($node[Literal::RDF_REST]) !== 1
+        ) {
+            return false;
+        }
+
+        $allowed = [Keywords::ID, Literal::RDF_FIRST, Literal::RDF_REST];
+        $keys = array_keys($node);
+
+        if (array_key_exists(Keywords::TYPE, $node)) {
+            if ($node[Keywords::TYPE] !== [self::RDF_LIST]) {
+                return false;
+            }
+
+            $allowed[] = Keywords::TYPE;
+        }
+
+        return array_diff($keys, $allowed) === [];
+    }
+
+    /**
+     * Turns compound literal nodes (rdf:value, rdf:language, rdf:direction)
+     * back into value objects.
+     *
+     * @param array<string, array<string, mixed>> $graph
+     * @param array<string, list<array{subject: string, property: string, slot: ArrayObject<string, mixed>}>> $usages
+     * @param array<string, true> $compoundSubjects
+     */
+    private function collapseCompoundLiterals(array &$graph, array $usages, array $compoundSubjects): void
+    {
+        foreach (array_keys($compoundSubjects) as $id) {
+            $nodeUsages = $usages[$id] ?? [];
+
+            if (count($nodeUsages) !== 1 || !isset($graph[$id])) {
+                continue;
+            }
+
+            $node = $graph[$id];
+            $literal = [Keywords::VALUE => $node[self::RDF_VALUE][0][Keywords::VALUE] ?? null];
+
+            if (isset($node[self::RDF_LANGUAGE][0][Keywords::VALUE])) {
+                $literal[Keywords::LANGUAGE] = $node[self::RDF_LANGUAGE][0][Keywords::VALUE];
+            }
+
+            if (isset($node[self::RDF_DIRECTION][0][Keywords::VALUE])) {
+                $literal[Keywords::DIRECTION] = $node[self::RDF_DIRECTION][0][Keywords::VALUE];
+            }
+
+            $nodeUsages[0]['slot']->exchangeArray($literal);
+            unset($graph[$id]);
+        }
+    }
+
+    /**
+     * RDF to Object conversion, API section 8.3.
+     *
+     * @return array<string, mixed>
+     */
+    private function objectToValue(Iri|BlankNode|Literal $term): array
+    {
+        if (!$term instanceof Literal) {
+            return [Keywords::ID => self::id($term)];
+        }
+
+        $datatype = $term->datatype ?? Literal::XSD_STRING;
+        $lexical = $term->value;
+        $result = [];
+        $converted = $lexical;
+        $type = null;
+
+        if ($this->useNativeTypes) {
+            if ($datatype === Literal::XSD_STRING) {
+                $converted = $lexical;
+            } elseif ($datatype === self::XSD_BOOLEAN) {
+                if (in_array($lexical, ['true', 'false', '1', '0'], true)) {
+                    $converted = $lexical === 'true' || $lexical === '1';
+                } else {
+                    $type = $datatype;
+                }
+            } elseif ($datatype === self::XSD_INTEGER && self::fitsInteger($lexical)) {
+                $converted = (int) $lexical;
+            } elseif ($datatype === self::XSD_DOUBLE
+                && preg_match('~^[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?\z~', $lexical) === 1
+                && is_finite((float) $lexical)
+            ) {
+                $converted = (float) $lexical;
+            } else {
+                $type = $datatype;
+            }
+        } elseif ($datatype === Literal::RDF_LANGSTRING) {
+            $result[Keywords::LANGUAGE] = $term->language;
+        } elseif ($datatype === Literal::RDF_JSON) {
+            try {
+                $converted = json_decode($lexical, true, 512, JSON_THROW_ON_ERROR);
+            } catch (JsonException) {
+                throw new InvalidInputException('invalid JSON literal');
+            }
+
+            $type = Keywords::JSON;
+        } elseif ($this->rdfDirection === 'i18n-datatype' && str_starts_with($datatype, ToRdf::I18N)) {
+            $parts = explode('_', substr($datatype, strlen(ToRdf::I18N)), 2);
+
+            if ($parts[0] !== '') {
+                $result[Keywords::LANGUAGE] = $parts[0];
+            }
+
+            $result[Keywords::DIRECTION] = $parts[1] ?? '';
+        } elseif ($datatype !== Literal::XSD_STRING) {
+            $type = $datatype;
+        }
+
+        if ($this->useNativeTypes && $datatype === Literal::RDF_LANGSTRING) {
+            $result[Keywords::LANGUAGE] = $term->language;
+            $type = null;
+        }
+
+        if ($this->useNativeTypes && $datatype === Literal::RDF_JSON) {
+            try {
+                $converted = json_decode($lexical, true, 512, JSON_THROW_ON_ERROR);
+            } catch (JsonException) {
+                throw new InvalidInputException('invalid JSON literal');
+            }
+
+            $type = Keywords::JSON;
+        }
+
+        $result[Keywords::VALUE] = $converted;
+
+        if ($type !== null) {
+            $result[Keywords::TYPE] = $type;
         }
 
         return $result;
     }
 
-    private function native(string $value, string $datatype): string|int|float|bool|null
+    private static function fitsInteger(string $lexical): bool
     {
-        return match ($datatype) {
-            self::XSD_BOOLEAN => $value === 'true',
-            self::XSD_INTEGER => filter_var($value, FILTER_VALIDATE_INT),
-            self::XSD_DOUBLE => is_numeric($value) ? (float) $value : null,
-            default => null,
-        };
+        if (preg_match('~^([+-]?)0*([0-9]+)\z~', $lexical, $match) !== 1) {
+            return false;
+        }
+
+        $normalized = ($match[1] === '-' && $match[2] !== '0' ? '-' : '') . $match[2];
+
+        return (string) (int) $normalized === $normalized;
     }
 
-    private static function termKey(Iri|BlankNode|Literal $term): string
+    private static function id(Iri|BlankNode $term): string
     {
-        if ($term instanceof Iri) {
-            return $term->value;
-        }
-
-        if ($term instanceof BlankNode) {
-            return '_:' . $term->id;
-        }
-
-        return hash('sha256', $term->value . '|' . ($term->language ?? '') . '|' . ($term->datatype ?? ''));
-    }
-
-    private static function graphKey(Quad $quad): string
-    {
-        if ($quad->graph === null) {
-            return '@default';
-        }
-
-        return self::termKey($quad->graph);
+        return $term instanceof BlankNode ? '_:' . $term->id : $term->value;
     }
 }

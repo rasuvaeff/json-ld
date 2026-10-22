@@ -55,6 +55,8 @@ final class Keywords
 
     public const string PREFIX = '@prefix';
 
+    public const string DEFAULT_GRAPH = '@default';
+
     /** Context-level keywords, never valid as a term. */
     public const array CONTEXT_LEVEL = [
         self::CONTEXT,

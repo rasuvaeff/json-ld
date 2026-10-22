@@ -394,11 +394,7 @@ final readonly class ExpansionRun
                     throw new InvalidInputException('invalid @id value');
                 }
 
-                $id = $this->processor->expandIri($context, $value, documentRelative: true);
-
-                if ($id !== null) {
-                    $result[Keywords::ID] = $id;
-                }
+                $result[Keywords::ID] = $this->processor->expandIri($context, $value, documentRelative: true);
 
                 return;
 
@@ -598,11 +594,12 @@ final readonly class ExpansionRun
             $mapContext = $context;
 
             if (in_array(Keywords::TYPE, $container, true)) {
-                $indexDefinition = $context->term($index);
+                $mapContext = $context->previous ?? $context;
+                $indexDefinition = $mapContext->term($index);
 
                 if ($indexDefinition !== null && $indexDefinition->hasContext) {
                     $mapContext = $this->processor->process(
-                        $context,
+                        $mapContext,
                         $indexDefinition->context,
                         $indexDefinition->baseUrl,
                     );

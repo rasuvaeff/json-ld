@@ -65,8 +65,9 @@ final class JsonLd
         string|array $input,
         ?ExpandOptions $options = null,
         bool $produceGeneralizedRdf = false,
+        ?string $rdfDirection = null,
     ): Dataset {
-        return (new ToRdf(produceGeneralizedRdf: $produceGeneralizedRdf))->toRdf($input, $options);
+        return (new ToRdf(produceGeneralizedRdf: $produceGeneralizedRdf, rdfDirection: $rdfDirection))->toRdf($input, $options);
     }
 
     /**
@@ -74,9 +75,13 @@ final class JsonLd
      *
      * @return list<mixed>
      */
-    public static function fromRdf(Dataset $dataset, bool $useNativeTypes = false): array
-    {
-        return (new FromRdf(useNativeTypes: $useNativeTypes))->fromRdf($dataset);
+    public static function fromRdf(
+        Dataset $dataset,
+        bool $useNativeTypes = false,
+        bool $useRdfType = false,
+        ?string $rdfDirection = null,
+    ): array {
+        return (new FromRdf(useNativeTypes: $useNativeTypes, useRdfType: $useRdfType, rdfDirection: $rdfDirection))->fromRdf($dataset);
     }
 
     public static function serializeNQuads(Dataset $dataset): string

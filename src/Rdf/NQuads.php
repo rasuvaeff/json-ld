@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Rasuvaeff\JsonLd\Rdf;
 
-use Rasuvaeff\JsonLd\Exception\InvalidJsonException;
+use Rasuvaeff\JsonLd\Exception\InvalidNQuadsException;
 
 /**
  * N-Quads serialization and parsing, RDF 1.1 N-Quads.
@@ -13,6 +13,12 @@ use Rasuvaeff\JsonLd\Exception\InvalidJsonException;
  */
 final class NQuads
 {
+    private const string IRIREF = '<((?:[^\x00-\x20<>"{}|^`\\\\]|\\\\u[0-9A-Fa-f]{4}|\\\\U[0-9A-Fa-f]{8})*)>';
+
+    private const string BLANK = '_:([A-Za-z0-9_\x{00C0}-\x{00D6}\x{00D8}-\x{00F6}\x{00F8}-\x{02FF}\x{0370}-\x{037D}\x{037F}-\x{1FFF}\x{200C}-\x{200D}\x{2070}-\x{218F}\x{2C00}-\x{2FEF}\x{3001}-\x{D7FF}\x{F900}-\x{FDCF}\x{FDF0}-\x{FFFD}\x{10000}-\x{EFFFF}](?:[A-Za-z0-9_\-.\x{00B7}\x{0300}-\x{036F}\x{203F}-\x{2040}\x{00C0}-\x{00D6}\x{00D8}-\x{00F6}\x{00F8}-\x{02FF}\x{0370}-\x{037D}\x{037F}-\x{1FFF}\x{200C}-\x{200D}\x{2070}-\x{218F}\x{2C00}-\x{2FEF}\x{3001}-\x{D7FF}\x{F900}-\x{FDCF}\x{FDF0}-\x{FFFD}\x{10000}-\x{EFFFF}]*[A-Za-z0-9_\-\x{00B7}\x{0300}-\x{036F}\x{203F}-\x{2040}\x{00C0}-\x{00D6}\x{00D8}-\x{00F6}\x{00F8}-\x{02FF}\x{0370}-\x{037D}\x{037F}-\x{1FFF}\x{200C}-\x{200D}\x{2070}-\x{218F}\x{2C00}-\x{2FEF}\x{3001}-\x{D7FF}\x{F900}-\x{FDCF}\x{FDF0}-\x{FFFD}\x{10000}-\x{EFFFF}])?)';
+
+    private const string LITERAL = '"((?:[^\x22\x5C\x0A\x0D]|\\\\[tbnrf"\'\\\\]|\\\\u[0-9A-Fa-f]{4}|\\\\U[0-9A-Fa-f]{8})*)"(?:\^\^<((?:[^\x00-\x20<>"{}|^`\\\\]|\\\\u[0-9A-Fa-f]{4}|\\\\U[0-9A-Fa-f]{8})*)>|@([A-Za-z]+(?:-[A-Za-z0-9]+)*))?';
+
     /**
      * Serializes a dataset; every quad becomes one line, statements keep
      * their order.
@@ -22,12 +28,12 @@ final class NQuads
         $lines = [];
 
         foreach ($dataset->quads as $quad) {
-            $line = self::term($quad->subject) . ' '
-                . self::term($quad->predicate) . ' '
-                . self::term($quad->object);
+            $line = self::formatTerm($quad->subject) . ' '
+                . self::formatTerm($quad->predicate) . ' '
+                . self::formatTerm($quad->object);
 
             if ($quad->graph !== null) {
-                $line .= ' ' . self::term($quad->graph);
+                $line .= ' ' . self::formatTerm($quad->graph);
             }
 
             $lines[] = $line . ' .';
@@ -37,87 +43,35 @@ final class NQuads
     }
 
     /**
-     * Parses N-Quads text into a dataset.
+     * Parses N-Quads text into a dataset. Comments and blank lines are
+     * ignored.
      *
-     * @throws InvalidJsonException never; invalid lines throw {@see \InvalidArgumentException}
+     * @throws InvalidNQuadsException when a line does not follow the grammar
      */
     public function parse(string $nquads): Dataset
     {
         $quads = [];
 
-        foreach (preg_split('~\r\n|\r|\n~', $nquads, -1, PREG_SPLIT_NO_EMPTY) ?: [] as $line) {
-            $line = trim($line);
+        foreach (preg_split('~\r\n|\r|\n~', $nquads) ?: [] as $number => $line) {
+            $line = trim($line, " \t");
 
-            if ($line === '') {
+            if ($line === '' || $line[0] === '#') {
                 continue;
             }
 
-            $quads[] = $this->parseLine($line);
+            $quads[] = $this->parseLine($line, $number + 1);
         }
 
         return new Dataset($quads);
     }
 
-    private function parseLine(string $line): Quad
-    {
-        $term = '(<(?:[^>\\\\]|\\\\.)*>|_:[A-Za-z0-9_\\-.]+|"(?:[^"\\\\]|\\\\.)*"(?:\\^\\^<(?:[^>\\\\]|\\\\.)*>|@[A-Za-z]+(?:-[A-Za-z0-9]+)*)?)';
-
-        if (preg_match("~^{$term}\\s+{$term}\\s+{$term}(?:\\s+{$term})?\\s*\\.\\z~", $line, $m) !== 1) {
-            throw new \InvalidArgumentException(sprintf('Invalid N-Quads line: %s', $line));
-        }
-
-        $subject = $this->parseTerm($m[1]);
-        $predicate = $this->parseTerm($m[2]);
-        $object = $this->parseTerm($m[3]);
-
-        if (!$subject instanceof Iri && !$subject instanceof BlankNode) {
-            throw new \InvalidArgumentException(sprintf('Invalid subject in N-Quads line: %s', $line));
-        }
-
-        if (!$predicate instanceof Iri) {
-            throw new \InvalidArgumentException(sprintf('Invalid predicate in N-Quads line: %s', $line));
-        }
-
-        $graph = isset($m[4]) && $m[4] !== '' ? $this->parseTerm($m[4]) : null;
-
-        if ($graph !== null && !$graph instanceof Iri && !$graph instanceof BlankNode) {
-            throw new \InvalidArgumentException(sprintf('Invalid graph name in N-Quads line: %s', $line));
-        }
-
-        return new Quad($subject, $predicate, $object, $graph);
-    }
-
-    private function parseTerm(string $raw): Iri|BlankNode|Literal
-    {
-        if (str_starts_with($raw, '_:')) {
-            return new BlankNode(substr($raw, 2));
-        }
-
-        if (str_starts_with($raw, '<')) {
-            return new Iri(self::unescape(substr($raw, 1, -1)));
-        }
-
-        if (preg_match('~^"((?:[^"\\\\]|\\\\.)*)"(?:\\^\\^<((?:[^>\\\\]|\\\\.)*)>|@([A-Za-z]+(?:-[A-Za-z0-9]+)*))?$~', $raw, $m) !== 1) {
-            throw new \InvalidArgumentException(sprintf('Invalid N-Quads term: %s', $raw));
-        }
-
-        $value = self::unescape($m[1]);
-
-        if (isset($m[3]) && $m[3] !== '') {
-            return Literal::langString($value, $m[3]);
-        }
-
-        if (isset($m[2]) && $m[2] !== '') {
-            return Literal::typed($value, self::unescape($m[2]));
-        }
-
-        return new Literal($value);
-    }
-
-    private static function term(Iri|BlankNode|Literal $term): string
+    /**
+     * @internal
+     */
+    public static function formatTerm(Iri|BlankNode|Literal $term): string
     {
         if ($term instanceof Iri) {
-            return '<' . self::escape($term->value) . '>';
+            return '<' . self::escape($term->value, iri: true) . '>';
         }
 
         if ($term instanceof BlankNode) {
@@ -131,33 +85,118 @@ final class NQuads
         }
 
         if ($term->datatype !== null && $term->datatype !== Literal::XSD_STRING) {
-            return $result . '^^<' . self::escape($term->datatype) . '>';
+            return $result . '^^<' . self::escape($term->datatype, iri: true) . '>';
         }
 
         return $result;
     }
 
-    /**
-     * Escapes STRING_LITERAL_QUOTE specials: quote, backslash and the
-     * characters N-Quads requires in ECHAR/UCHAR form.
-     */
-    private static function escape(string $value): string
+    private function parseLine(string $line, int $number): Quad
     {
-        $escaped = str_replace(
-            ['\\', '"', "\n", "\r", "\t"],
-            ['\\\\', '\\"', '\\n', '\\r', '\\t'],
-            $value,
-        );
+        $terms = [];
+        $offset = 0;
+        $length = strlen($line);
 
-        if (preg_match('~[^\x20-\x7E]~u', $escaped) === 1 || preg_match('~[\x00-\x1F]~', $escaped) === 1) {
-            $escaped = preg_replace_callback(
-                '~[\x00-\x1F]|[\x7F]~',
-                static fn(array $m): string => sprintf('\\u%04X', ord($m[0])),
-                $escaped,
-            ) ?? $escaped;
+        while (count($terms) < 4) {
+            $offset += strspn($line, " \t", $offset);
+
+            if ($offset >= $length || $line[$offset] === '.') {
+                break;
+            }
+
+            $term = $this->matchTerm($line, $offset);
+
+            if ($term === null) {
+                throw new InvalidNQuadsException(sprintf('Invalid N-Quads term at line %d', $number));
+            }
+
+            $terms[] = $term[0];
+            $offset = $term[1];
         }
 
-        return $escaped;
+        $offset += strspn($line, " \t", $offset);
+
+        if (($line[$offset] ?? '') !== '.') {
+            throw new InvalidNQuadsException(sprintf('Missing "." at line %d', $number));
+        }
+
+        $rest = trim(substr($line, $offset + 1), " \t");
+
+        if ($rest !== '' && $rest[0] !== '#') {
+            throw new InvalidNQuadsException(sprintf('Unexpected content after "." at line %d', $number));
+        }
+
+        if (count($terms) < 3) {
+            throw new InvalidNQuadsException(sprintf('Incomplete statement at line %d', $number));
+        }
+
+        [$subject, $predicate, $object] = $terms;
+        $graph = $terms[3] ?? null;
+
+        if ((!$subject instanceof Iri && !$subject instanceof BlankNode)
+            || !$predicate instanceof Iri
+            || ($graph !== null && !$graph instanceof Iri && !$graph instanceof BlankNode)
+        ) {
+            throw new InvalidNQuadsException(sprintf('Invalid term position at line %d', $number));
+        }
+
+        return new Quad($subject, $predicate, $object, $graph);
+    }
+
+    /**
+     * @return array{0: Iri|BlankNode|Literal, 1: int}|null
+     */
+    private function matchTerm(string $line, int $offset): ?array
+    {
+        if (preg_match('~\G' . self::IRIREF . '~u', $line, $match, 0, $offset) === 1) {
+            return [new Iri(self::unescape($match[1])), $offset + strlen($match[0])];
+        }
+
+        if (preg_match('~\G' . self::BLANK . '~u', $line, $match, 0, $offset) === 1) {
+            return [new BlankNode($match[1]), $offset + strlen($match[0])];
+        }
+
+        if (preg_match('~\G' . self::LITERAL . '~u', $line, $match, 0, $offset) === 1) {
+            $value = self::unescape($match[1]);
+
+            if (isset($match[3]) && $match[3] !== '') {
+                $literal = Literal::langString($value, $match[3]);
+            } elseif (isset($match[2]) && $match[2] !== '') {
+                $literal = Literal::typed($value, self::unescape($match[2]));
+            } else {
+                $literal = Literal::string($value);
+            }
+
+            return [$literal, $offset + strlen($match[0])];
+        }
+
+        return null;
+    }
+
+    /**
+     * Escapes the characters N-Quads canonical form escapes: `\`, `"` and
+     * the control characters.
+     */
+    private static function escape(string $value, bool $iri = false): string
+    {
+        if ($iri) {
+            return $value;
+        }
+
+        return preg_replace_callback(
+            '~[\x00-\x1F\x22\x5C\x7F]~',
+            static fn(array $m): string => match ($m[0]) {
+                "\x08" => '\\b',
+                "\t" => '\\t',
+                "\n" => '\\n',
+                "\x0C" => '\\f',
+                "\r" => '\\r',
+                '"' => '\\"',
+                '\\' => '\\\\',
+                default => sprintf('\\u%04X', ord($m[0])),
+            },
+            $value,
+        ) ?? $value;
     }
 
     private static function unescape(string $value): string
@@ -168,7 +207,7 @@ final class NQuads
                 $token = $m[1];
 
                 if ($token[0] === 'u' || $token[0] === 'U') {
-                    return mb_chr((int) hexdec(substr($token, 1)));
+                    return mb_chr((int) hexdec(substr($token, 1))) ?: '';
                 }
 
                 return match ($token) {
@@ -177,7 +216,6 @@ final class NQuads
                     'n' => "\n",
                     'r' => "\r",
                     'f' => "\x0C",
-                    '"', "'", '\\' => $token,
                     default => $token,
                 };
             },

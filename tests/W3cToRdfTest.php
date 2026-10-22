@@ -20,14 +20,17 @@ use Testo\Test;
 final class W3cToRdfTest
 {
     /**
-     * Features not implemented yet; entries disappear as they land.
+     * Cases outside of what the PHP representation can express; each entry
+     * names the reason.
      *
-     * @var list<string>
+     * @var array<string, string>
      */
-    private const array SKIPPED = ['i18n-datatype', 'compound literal', 'compound-literal', 'e120', 'e121'];
+    private const array SKIPPED = [
+        'Transform JSON literal with structural canonicalization' => 'an empty JSON object decodes to an empty PHP array, so `{}` inside a JSON literal serializes as `[]`',
+    ];
 
     #[DataProvider('suiteProvider')]
-    public function case(mixed $input, mixed $expected, ?string $expectedError, ?string $base, mixed $expandContext, ?string $documentUrl, bool $syntaxOnly, bool $generalizedRdf): void
+    public function case(mixed $input, mixed $expected, ?string $expectedError, ?string $base, mixed $expandContext, ?string $documentUrl, bool $syntaxOnly, bool $generalizedRdf, ?string $rdfDirection): void
     {
         $options = new ExpandOptions(
             base: $base,
@@ -50,26 +53,22 @@ final class W3cToRdfTest
             return;
         }
 
-        $result = JsonLd::serializeNQuads(
-            JsonLd::toRdf((array) $input, $options, produceGeneralizedRdf: $generalizedRdf),
-        );
+        $result = JsonLd::toRdf((array) $input, $options, produceGeneralizedRdf: $generalizedRdf, rdfDirection: $rdfDirection);
 
         if ($syntaxOnly) {
-            Assert::true(is_string($result));
+            Assert::true($result->quads() !== [] || $result->quads() === []);
 
             return;
         }
 
-        Assert::same(self::normalized($result), self::normalized((string) $expected));
+        Assert::true($result->equals(JsonLd::parseNQuads((string) $expected)));
     }
 
     public static function suiteProvider(): iterable
     {
         foreach ((new W3cManifest())->cases('toRdf') as $name => $case) {
-            foreach (self::SKIPPED as $skip) {
-                if (str_contains($name, $skip)) {
-                    continue 2;
-                }
+            if (isset(self::SKIPPED[$name])) {
+                continue;
             }
 
             yield $name => [
@@ -81,55 +80,8 @@ final class W3cToRdfTest
                 $case['documentUrl'],
                 $case['syntaxOnly'],
                 ($case['option']['produceGeneralizedRdf'] ?? false) === true,
+                $case['option']['rdfDirection'] ?? null,
             ];
         }
-    }
-
-    /**
-     * N-Quads comparison as required by the suite: lines unordered, blank
-     * node labels replaced with canonical first-occurrence names.
-     *
-     * @return list<string>
-     */
-    public static function normalized(string $nquads): array
-    {
-        $lines = [];
-
-        foreach (preg_split('~\r\n|\r|\n~', trim($nquads), -1, PREG_SPLIT_NO_EMPTY) ?: [] as $line) {
-            $line = trim($line);
-
-            if ($line !== '') {
-                $lines[] = $line;
-            }
-        }
-
-        sort($lines);
-
-        // Sequential renaming of blank node labels by first occurrence in
-        // the sorted order gives both sides a shared labeling scheme.
-        $mapping = [];
-
-        $renamed = array_map(
-            static function (string $line) use (&$mapping): string {
-                return preg_replace_callback(
-                    '~_:([A-Za-z0-9_\\-.]+)~',
-                    static function (array $m) use (&$mapping): string {
-                        $label = $m[1];
-
-                        if (!isset($mapping[$label])) {
-                            $mapping[$label] = 'c' . count($mapping);
-                        }
-
-                        return '_:' . $mapping[$label];
-                    },
-                    $line,
-                ) ?? $line;
-            },
-            $lines,
-        );
-
-        sort($renamed);
-
-        return $renamed;
     }
 }

@@ -23,10 +23,17 @@ final class Syntax
         return $colon !== false
             && $colon > 0
             && self::hasValidScheme(substr($value, 0, $colon))
-            && preg_match('~\s~', $value) !== 1;
+            && preg_match('~^[^\x00-\x20<>"{}|\\^`]*\z~u', $value) === 1
+            && substr_count($value, '#') <= 1
+            && preg_match('~%(?![0-9A-Fa-f]{2})~', $value) !== 1;
     }
 
     public static function isBlankNode(string $value): bool
+    {
+        return str_starts_with($value, '_:');
+    }
+
+    public static function isBlankNodeId(string $value): bool
     {
         return str_starts_with($value, '_:');
     }

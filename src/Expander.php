@@ -30,6 +30,22 @@ final class Expander
      */
     public function expand(string|array $input, ?ExpandOptions $options = null): array
     {
+        /** @var list<mixed> */
+        return ExpansionRun::strip($this->expandRaw($input, $options));
+    }
+
+    /**
+     * Like {@see self::expand()}, but empty node objects stay marked so that
+     * the node map can still turn them into blank nodes.
+     *
+     * @param string|array<mixed> $input
+     *
+     * @return list<mixed>
+     *
+     * @internal
+     */
+    public function expandRaw(string|array $input, ?ExpandOptions $options = null): array
+    {
         $options ??= new ExpandOptions();
         $documentUrl = $options->documentUrl;
 
@@ -59,8 +75,6 @@ final class Expander
         }
 
         $expanded = (new ExpansionRun($processor, $baseUrl))->expand($context, null, $input);
-        $expanded = ExpansionRun::strip($expanded);
-
         if (is_array($expanded) && !array_is_list($expanded)
             && count($expanded) === 1
             && array_key_exists(Keywords::GRAPH, $expanded)
