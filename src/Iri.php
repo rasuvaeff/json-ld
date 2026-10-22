@@ -70,17 +70,23 @@ final readonly class Iri
             $beforeQuery = substr($beforeFragment, 0, $question);
         }
 
-        if (preg_match(self::PATTERN, $beforeQuery, $matches) !== 1) {
+        if (preg_match(self::PATTERN, $beforeQuery, $matches, PREG_OFFSET_CAPTURE) !== 1) {
             throw new \InvalidArgumentException('Invalid IRI reference');
         }
 
         [, $scheme, $authority, $path] = $matches;
 
+        // An authority is present when the regex captured it at any offset —
+        // even empty (`file:///x`): only an unmatched group means absence.
+        $authority = $authority[1] !== -1 ? $authority[0] : null;
+        $scheme = $scheme[1] !== -1 ? $scheme[0] : null;
+        $path = $path[0];
+
         $userInfo = null;
         $host = null;
         $port = null;
 
-        if ($authority !== '') {
+        if ($authority !== null) {
             $hostPart = $authority;
 
             $at = strpos($hostPart, '@');

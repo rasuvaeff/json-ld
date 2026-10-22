@@ -196,7 +196,7 @@ final class IriTest
     {
         $host = Gen::map(
             static fn(array $parts): string => implode('.', $parts),
-            Gen::nonEmptyArrayOf(Gen::stringFrom('abcdefghij', maxSize: 8), minLength: 1, maxLength: 3),
+            Gen::nonEmptyArrayOf(Gen::stringFrom('abcdefghij', minLength: 1, maxLength: 8), maxSize: 3),
         );
 
         $segment = Gen::stringFrom('abcdefghij0123456789;=,', minLength: 0, maxLength: 6);

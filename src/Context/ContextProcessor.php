@@ -405,11 +405,16 @@ final class ContextProcessor
                 throw new InvalidContextException('invalid IRI mapping');
             }
         } elseif ($colon !== false) {
-            // A term that is already an absolute IRI maps to itself; a
-            // compact IRI term expands through its prefix.
-            $mapping = IriExpansion::hasValidScheme(substr($term, 0, $colon))
+            // A term that is already an absolute IRI maps to itself — but
+            // only when its prefix is not itself a context term: a compact
+            // IRI term expands through its prefix.
+            $prefix = substr($term, 0, $colon);
+
+            $prefixKnown = array_key_exists($prefix, $localContext) || $builder->isMapped($prefix);
+
+            $mapping = !$prefixKnown && IriExpansion::hasValidScheme($prefix)
                 ? $term
-                : $this->expandTermIri($builder, $term, true, $localContext, $defined, $options, documentRelative: true);
+                : $this->expandTermIri($builder, $term, true, $localContext, $defined, $options, documentRelative: true, skipSelf: true);
 
             if ($mapping === null) {
                 throw new InvalidContextException('invalid IRI mapping');
@@ -645,6 +650,7 @@ final class ContextProcessor
         array &$defined,
         ProcessOptions $options,
         bool $documentRelative = false,
+        bool $skipSelf = false,
     ): ?string {
         if ($value === '') {
             return null;
@@ -654,7 +660,7 @@ final class ContextProcessor
             return $value;
         }
 
-        if (array_key_exists($value, $localContext)) {
+        if (!$skipSelf && array_key_exists($value, $localContext)) {
             if (!array_key_exists($value, $defined)) {
                 $localValue = $localContext[$value];
 

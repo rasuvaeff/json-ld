@@ -363,6 +363,10 @@ final class ToRdf
             return self::doubleCanonical($value);
         }
 
+        if (is_int($value) && $datatype === self::XSD_DOUBLE) {
+            return self::doubleCanonical((float) $value);
+        }
+
         return (string) $value;
     }
 

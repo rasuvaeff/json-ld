@@ -147,15 +147,14 @@ final class Expander
             );
         }
 
+        // A non-propagating (scoped) context applies to this object only:
+        // entering a node without its own @type reverts to the previous
+        // context. Type-scoped contexts activate in the member loop, in
+        // `@type` order.
         $typeKey = $this->aliasKey($context, $element, Keywords::TYPE);
 
-        // Type-scoped contexts: applied when the object is entered from the
-        // node level (no active property, @graph, or inside @reverse).
-        if (!$objectFlags->insideIndex
-            && ($activeProperty === null || $activeProperty === Keywords::GRAPH || $objectFlags->insideReverse)
-            && $typeKey !== null
-        ) {
-            $context = $this->applyTypeScopedContexts($context, $element[$typeKey], $state);
+        if ($context->previousContext !== null && $typeKey === null) {
+            $context = $context->previousContext;
         }
 
         $valueKey = $this->aliasKey($context, $element, Keywords::VALUE);
@@ -301,7 +300,7 @@ final class Expander
      * @param array<string, mixed> $result
      */
     private function expandKeywordMember(
-        ActiveContext $context,
+        ActiveContext &$context,
         string $keyword,
         mixed $value,
         array &$result,
@@ -319,7 +318,9 @@ final class Expander
                     throw new InvalidContextException('invalid @id value');
                 }
 
-                $expanded = IriExpansion::expand($context, $value, documentRelative: true);
+                $expanded = $value === '' && $context->base !== null
+                    ? (string) $context->base
+                    : IriExpansion::expand($context, $value, documentRelative: true);
 
                 if ($expanded === null || $expanded === '') {
                     throw new InvalidContextException('invalid @id value');
@@ -336,6 +337,18 @@ final class Expander
                 foreach ($types as $type) {
                     if (!is_string($type)) {
                         throw new InvalidContextException('invalid type value');
+                    }
+
+                    // Type-scoped contexts activate in @type order and do
+                    // not propagate to nested nodes.
+                    $typeTerm = $this->lookupTerm($context, $type);
+
+                    if ($typeTerm?->localContext !== null) {
+                        $context = $this->processor->process(
+                            $context,
+                            $typeTerm->localContext,
+                            new ProcessOptions(loader: $state->loader, base: $context->base, propagate: false),
+                        );
                     }
 
                     $expandedType = Keywords::isKeyword($type)
@@ -487,7 +500,7 @@ final class Expander
             );
 
             foreach (is_array($expanded) && array_is_list($expanded) ? $expanded : [$expanded] as $node) {
-                if (!is_array($node) || array_is_list($node) || !array_key_exists(Keywords::ID, $node)) {
+                if (!is_array($node) || array_is_list($node) || array_key_exists(Keywords::VALUE, $node)) {
                     throw new InvalidContextException('invalid reverse property value');
                 }
 
@@ -605,6 +618,12 @@ final class Expander
         }
 
         if ($termDefinition?->reverse) {
+            foreach (is_array($expandedValue) && array_is_list($expandedValue) ? $expandedValue : [$expandedValue] as $node) {
+                if (!is_array($node) || array_is_list($node)) {
+                    throw new InvalidContextException('invalid reverse property value');
+                }
+            }
+
             /** @var array<string, mixed> $reverse */
             $reverse = $result[Keywords::REVERSE] ?? [];
             $this->addValue($reverse, $expandedProperty, $expandedValue, true);
