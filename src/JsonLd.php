@@ -61,9 +61,12 @@ final class JsonLd
      *
      * @param string|array<mixed> $input
      */
-    public static function toRdf(string|array $input, ?ExpandOptions $options = null): Dataset
-    {
-        return (new ToRdf())->toRdf($input, $options);
+    public static function toRdf(
+        string|array $input,
+        ?ExpandOptions $options = null,
+        bool $produceGeneralizedRdf = false,
+    ): Dataset {
+        return (new ToRdf(produceGeneralizedRdf: $produceGeneralizedRdf))->toRdf($input, $options);
     }
 
     /**

@@ -975,8 +975,12 @@ final class Expander
             if ($type === Keywords::ID || $type === Keywords::VOCAB) {
                 if (is_string($value)) {
                     // @id/@vocab coercion turns a string into a node
-                    // reference; an empty string expands to nothing and the
-                    // value becomes an empty node object.
+                    // reference; an empty string resolves to the base under
+                    // @id, and to nothing when there is no base.
+                    if ($value === '' && $type === Keywords::ID && $context->base !== null) {
+                        return [Keywords::ID => (string) $context->base];
+                    }
+
                     $expanded = $type === Keywords::ID
                         ? IriExpansion::expand($context, $value, documentRelative: true)
                         : IriExpansion::expand($context, $value, vocab: true);

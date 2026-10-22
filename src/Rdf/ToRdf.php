@@ -25,7 +25,10 @@ final class ToRdf
 
     private const string XSD_DOUBLE = 'http://www.w3.org/2001/XMLSchema#double';
 
-    public function __construct(private readonly Expander $expander = new Expander()) {}
+    public function __construct(
+        private readonly Expander $expander = new Expander(),
+        private readonly bool $produceGeneralizedRdf = false,
+    ) {}
 
     /**
      * @param string|array<mixed> $input
@@ -105,6 +108,10 @@ final class ToRdf
                 continue;
             }
 
+            if (str_starts_with($property, '_:') && !$this->produceGeneralizedRdf) {
+                continue;
+            }
+
             foreach (is_array($value) && array_is_list($value) ? $value : [$value] as $item) {
                 if (!is_array($item) || array_is_list($item)) {
                     continue;
@@ -123,6 +130,9 @@ final class ToRdf
                 }
 
                 if (isset($item[Keywords::ID]) && is_string($item[Keywords::ID])) {
+                    // A referenced node: emit its own statements too.
+                    $this->emitNode($item, $graph, $quads, $generator);
+
                     $quads[] = new Quad(
                         $subject,
                         new Iri($property),
@@ -131,7 +141,20 @@ final class ToRdf
                             : new Iri($item[Keywords::ID]),
                         $graph,
                     );
+
+                    continue;
                 }
+
+                // An embedded node without @id becomes a fresh blank node.
+                $item[Keywords::ID] = $generator->next();
+                $this->emitNode($item, $graph, $quads, $generator);
+
+                $quads[] = new Quad(
+                    $subject,
+                    new Iri($property),
+                    new BlankNode(substr($item[Keywords::ID], 2)),
+                    $graph,
+                );
             }
         }
     }
@@ -148,30 +171,112 @@ final class ToRdf
         array &$quads,
         BlankNodeGenerator $generator,
     ): void {
+        if ($items === []) {
+            // An empty list is rdf:nil itself.
+            $quads[] = new Quad($subject, $predicate, new Iri(Literal::RDF_NIL), $graph);
+
+            return;
+        }
+
         $head = new BlankNode(substr($generator->next(), 2));
         $quads[] = new Quad($subject, $predicate, $head, $graph);
 
         $current = $head;
+        $lastIndex = count($items) - 1;
 
         foreach ($items as $index => $item) {
-            $object = is_array($item) && !array_is_list($item)
-                ? ($this->nodeValue($item, $quads, $graph, $generator) ?? $this->literal($item))
-                : new Literal((string) $item);
-
-            if (is_array($item) && !array_is_list($item) && isset($item[Keywords::LIST])) {
-                $nestedHead = new BlankNode(substr($generator->next(), 2));
-                $this->emitList($item[Keywords::LIST], $subject, $predicate, $graph, $quads, $generator);
-                $object = $nestedHead;
-            }
+            $object = $this->listObject($item, $quads, $graph, $generator);
 
             $quads[] = new Quad($current, new Iri(Literal::RDF_FIRST), $object, $graph);
 
-            $rest = new BlankNode(substr($generator->next(), 2));
+            $rest = $index === $lastIndex
+                ? new Iri(Literal::RDF_NIL)
+                : new BlankNode(substr($generator->next(), 2));
+
             $quads[] = new Quad($current, new Iri(Literal::RDF_REST), $rest, $graph);
-            $current = $rest;
+
+            if ($rest instanceof BlankNode) {
+                $current = $rest;
+            }
+        }
+    }
+
+    /**
+     * The RDF term for one list item: literals from value objects, named
+     * nodes from references, a nested chain head for inner lists.
+     *
+     * @param mixed $item
+     * @param list<Quad> $quads
+     */
+    private function listObject(
+        mixed $item,
+        array &$quads,
+        Iri|BlankNode|null $graph,
+        BlankNodeGenerator $generator,
+    ): Iri|BlankNode|Literal {
+        if (is_array($item) && !array_is_list($item)) {
+            if (isset($item[Keywords::LIST])) {
+                $nested = new BlankNode(substr($generator->next(), 2));
+                $inner = is_array($item[Keywords::LIST]) && array_is_list($item[Keywords::LIST])
+                    ? $item[Keywords::LIST]
+                    : [$item[Keywords::LIST]];
+                $this->emitListInto($inner, $nested, $quads, $graph, $generator);
+
+                return $nested;
+            }
+
+            if (isset($item[Keywords::VALUE])) {
+                return $this->literal($item);
+            }
+
+            if (isset($item[Keywords::ID]) && is_string($item[Keywords::ID])) {
+                return str_starts_with($item[Keywords::ID], '_:')
+                    ? new BlankNode(substr($item[Keywords::ID], 2))
+                    : new Iri($item[Keywords::ID]);
+            }
         }
 
-        $quads[] = new Quad($current, new Iri(Literal::RDF_REST), new Iri(Literal::RDF_NIL), $graph);
+        return new Literal((string) $item);
+    }
+
+    /**
+     * Emits a list chain whose head is already allocated, without the
+     * property quad.
+     *
+     * @param list<mixed> $items
+     * @param list<Quad> $quads
+     */
+    private function emitListInto(
+        array $items,
+        BlankNode $head,
+        array &$quads,
+        Iri|BlankNode|null $graph,
+        BlankNodeGenerator $generator,
+    ): void {
+        if ($items === []) {
+            $quads[] = new Quad($head, new Iri(Literal::RDF_FIRST), new Iri(Literal::RDF_NIL), $graph);
+
+            return;
+        }
+
+        $current = $head;
+        $lastIndex = count($items) - 1;
+
+        foreach ($items as $index => $item) {
+            $object = $this->listObject($item, $quads, $graph, $generator);
+
+            $quads[] = new Quad($current, new Iri(Literal::RDF_FIRST), $object, $graph);
+
+            $rest = $index === $lastIndex
+                ? new Iri(Literal::RDF_NIL)
+                : new BlankNode(substr($generator->next(), 2));
+
+            $quads[] = new Quad($current, new Iri(Literal::RDF_REST), $rest, $graph);
+
+            if ($rest instanceof BlankNode) {
+                $current = $rest;
+            }
+        }
     }
 
     /**
@@ -225,7 +330,20 @@ final class ToRdf
             return Literal::typed($this->lexical($value, $type), $type);
         }
 
-        return Literal::typed($this->lexical($value, null), Literal::XSD_STRING);
+        // Default datatypes by value kind: xsd:boolean / xsd:integer /
+        // xsd:double for native JSON values, plain string otherwise.
+        $datatype = match (true) {
+            is_bool($value) => self::XSD_BOOLEAN,
+            is_int($value) => self::XSD_INTEGER,
+            is_float($value) => self::XSD_DOUBLE,
+            default => null,
+        };
+
+        if ($datatype === null) {
+            return Literal::string((string) $value);
+        }
+
+        return Literal::typed($this->lexical($value, $datatype), $datatype);
     }
 
     /**
@@ -242,7 +360,7 @@ final class ToRdf
         }
 
         if (is_float($value)) {
-            return $datatype === self::XSD_DOUBLE ? self::doubleCanonical($value) : self::doubleCanonical($value);
+            return self::doubleCanonical($value);
         }
 
         return (string) $value;

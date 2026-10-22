@@ -70,8 +70,13 @@ final class IriExpansion
             return $context->vocab . $value;
         }
 
-        if ($documentRelative && $context->base !== null) {
-            return (string) $context->base->resolve(Iri::of($value));
+        if ($documentRelative) {
+            // Without a base, a relative reference stays as it is.
+            if ($context->base !== null) {
+                return (string) $context->base->resolve(Iri::of($value));
+            }
+
+            return $value;
         }
 
         return null;

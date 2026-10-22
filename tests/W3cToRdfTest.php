@@ -20,7 +20,7 @@ use Testo\Test;
 final class W3cToRdfTest
 {
     #[DataProvider('suiteProvider')]
-    public function case(mixed $input, mixed $expected, ?string $expectedError, ?string $base, mixed $expandContext, bool $syntaxOnly): void
+    public function case(mixed $input, mixed $expected, ?string $expectedError, ?string $base, mixed $expandContext, bool $syntaxOnly, bool $generalizedRdf): void
     {
         $options = new ExpandOptions(
             base: $base,
@@ -42,7 +42,9 @@ final class W3cToRdfTest
             return;
         }
 
-        $result = JsonLd::serializeNQuads(JsonLd::toRdf((array) $input, $options));
+        $result = JsonLd::serializeNQuads(
+            JsonLd::toRdf((array) $input, $options, produceGeneralizedRdf: $generalizedRdf),
+        );
 
         if ($syntaxOnly) {
             Assert::true(is_string($result));
@@ -63,6 +65,7 @@ final class W3cToRdfTest
                 $case['base'],
                 $case['expandContext'],
                 $case['syntaxOnly'],
+                ($case['option']['produceGeneralizedRdf'] ?? false) === true,
             ];
         }
     }
