@@ -100,10 +100,6 @@ final class ContextProcessor
                 }
 
                 $context = $this->process($context, $item, $options);
-
-                // Later members resolve their references against the base
-                // accumulated so far.
-                $options = $options->withBase($context->base);
             }
 
             return $context;
@@ -403,7 +399,14 @@ final class ContextProcessor
                 } else {
                     $mapping = $this->expandTermIri($builder, $id, true, $localContext, $defined, $options, documentRelative: true);
 
-                    if ($mapping !== null && !IriExpansion::isAbsolute($mapping) && !str_starts_with($mapping, '_:')) {
+                    if ($mapping !== null && str_starts_with($mapping, '@')) {
+                        if ($mapping === Keywords::JSON || $mapping === Keywords::CONTEXT) {
+                            throw new InvalidContextException('invalid keyword alias');
+                        }
+
+                        $keyword = $mapping;
+                        $mapping = null;
+                    } elseif ($mapping !== null && !IriExpansion::isAbsolute($mapping) && !str_starts_with($mapping, '_:')) {
                         throw new InvalidContextException('invalid IRI mapping');
                     }
                 }
@@ -529,6 +532,8 @@ final class ContextProcessor
                 );
             } catch (InvalidContextException $exception) {
                 if ($exception->getMessage() === 'invalid context nullification' && !$options->scoped) {
+                    // First-level nullification keeps its own code; nested
+                    // ones surface as `invalid scoped context`.
                     throw $exception;
                 }
 
@@ -678,8 +683,16 @@ final class ContextProcessor
             }
 
             if (isset($defined[$value]) && $defined[$value] === false) {
-                // The term is currently being defined: a reference cycle.
-                throw new InvalidContextException('cyclic IRI mapping');
+                // The term is currently being defined: fall through to the
+                // compact-IRI path — a self-reference through a valid
+                // prefix is legal, anything else is a cycle.
+                $colon = strpos($value, ':');
+
+                if ($colon === false || !str_starts_with(substr($value, $colon + 1), '//')) {
+                    if ($colon === false) {
+                        throw new InvalidContextException('cyclic IRI mapping');
+                    }
+                }
             }
 
             $definition = $builder->term($value);

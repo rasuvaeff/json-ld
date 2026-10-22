@@ -562,7 +562,7 @@ final class Expander
             $context = $this->processor->process(
                 $context,
                 $termDefinition->localContext,
-                new ProcessOptions(loader: $state->loader, base: $context->base),
+                new ProcessOptions(loader: $state->loader, base: $context->base, scoped: true),
             );
 
             $termDefinition = $this->lookupTerm($context, (string) $key);
