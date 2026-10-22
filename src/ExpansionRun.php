@@ -22,13 +22,17 @@ use Rasuvaeff\JsonLd\Exception\InvalidInputException;
  *
  * @psalm-import-type JsonValue from \Rasuvaeff\JsonLd\Json
  */
-final readonly class ExpansionRun
+final class ExpansionRun
 {
     public const string EMPTY = "\0empty";
 
+    private const int MAX_DEPTH = 512;
+
+    private int $depth = 0;
+
     public function __construct(
-        private ContextProcessor $processor,
-        private ?string $baseUrl,
+        private readonly ContextProcessor $processor,
+        private readonly ?string $baseUrl,
     ) {}
 
     public static function strip(mixed $value): mixed
@@ -48,6 +52,19 @@ final readonly class ExpansionRun
      * @return mixed null when dropped, a list, or a map
      */
     public function expand(ActiveContext $context, ?string $activeProperty, mixed $element, bool $fromMap = false): mixed
+    {
+        if (++$this->depth > self::MAX_DEPTH) {
+            throw new InvalidInputException('document nested too deeply');
+        }
+
+        try {
+            return $this->expandElement($context, $activeProperty, $element, $fromMap);
+        } finally {
+            $this->depth--;
+        }
+    }
+
+    private function expandElement(ActiveContext $context, ?string $activeProperty, mixed $element, bool $fromMap): mixed
     {
         if ($element === null) {
             return null;

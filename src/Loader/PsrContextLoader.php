@@ -27,9 +27,15 @@ final readonly class PsrContextLoader implements ContextLoaderInterface
 {
     private const string ACCEPT = 'application/ld+json, application/json;q=0.9, */*;q=0.1';
 
+    /**
+     * @param \Closure(string): bool|null $urlPolicy decides whether a URL may be fetched; null allows every http(s) URL
+     * @param int<1, max> $maxBytes response bodies larger than this are rejected
+     */
     public function __construct(
         private ClientInterface $client,
         private RequestFactoryInterface $requestFactory,
+        private ?\Closure $urlPolicy = null,
+        private int $maxBytes = 1_048_576,
     ) {}
 
     #[\Override]
@@ -39,6 +45,10 @@ final readonly class PsrContextLoader implements ContextLoaderInterface
 
         if ($scheme !== 'http' && $scheme !== 'https') {
             throw new DocumentLoadingException(sprintf('Only http and https references can be loaded, "%s" given', $reference));
+        }
+
+        if ($this->urlPolicy !== null && !($this->urlPolicy)($reference)) {
+            throw new DocumentLoadingException(sprintf('The URL policy refused "%s"', $reference));
         }
 
         $request = $this->requestFactory
@@ -57,7 +67,17 @@ final readonly class PsrContextLoader implements ContextLoaderInterface
             );
         }
 
-        $body = (string) $response->getBody();
+        $size = $response->getBody()->getSize();
+
+        if ($size !== null && $size > $this->maxBytes) {
+            throw new DocumentLoadingException(sprintf('Response of "%s" exceeds %d bytes', $reference, $this->maxBytes));
+        }
+
+        $body = $response->getBody()->read($this->maxBytes + 1);
+
+        if (strlen($body) > $this->maxBytes) {
+            throw new DocumentLoadingException(sprintf('Response of "%s" exceeds %d bytes', $reference, $this->maxBytes));
+        }
 
         try {
             return new LoadedContext(documentUrl: $reference, document: Json::decode($body));
