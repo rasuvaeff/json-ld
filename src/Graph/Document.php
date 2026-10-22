@@ -58,11 +58,13 @@ final readonly class Document
             }
         }
 
-        $this->graphs = [self::DEFAULT_GRAPH => new Graph($default)];
+        $graphs = [self::DEFAULT_GRAPH => new Graph($default)];
 
         foreach ($named as $name => $items) {
-            $this->graphs[$name] = new Graph($items);
+            $graphs[$name] = new Graph($items);
         }
+
+        $this->graphs = $graphs;
     }
 
     /**

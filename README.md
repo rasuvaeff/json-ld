@@ -14,8 +14,8 @@ JSON-LD 1.1 processor for PHP: expand, flatten, node API, RDF and N-Quads.
 
 ## Requirements
 
-- PHP 8.3+
-- `ext-json`, `ext-mbstring`, `ext-dom`
+- PHP 8.3–8.5 (8.6 is checked in CI as experimental)
+- `ext-json`, `ext-mbstring`
 - `psr/http-client` ^1.0, `psr/http-factory` ^1.0, `psr/http-message` ^1.0 || ^2.0
 
 ## Installation
@@ -26,26 +26,76 @@ composer require rasuvaeff/json-ld
 
 ## Usage
 
-<!-- Add usage examples here. For each public class, show:
-- How to create/construct
-- Key methods with examples
-- Table of public API
--->
+```php
+use Rasuvaeff\JsonLd\ExpandOptions;
+use Rasuvaeff\JsonLd\JsonLd;
+
+$options = new ExpandOptions(base: 'https://example.com/page', loader: $loader);
+
+$expanded = JsonLd::expand($document, $options);   // list of node/value objects
+$flat     = JsonLd::flatten($document, $options);  // nodes keyed by @id, blank nodes relabeled _:b0, _:b1, ...
+$dataset  = JsonLd::toRdf($document, $options);    // Dataset of quads
+$nquads   = JsonLd::serializeNQuads($dataset);
+$back     = JsonLd::fromRdf(JsonLd::parseNQuads($nquads));
+```
+
+`$document` is a decoded array or an inline JSON string.
+
+| Class | Purpose |
+|---|---|
+| `JsonLd` | Facade: `expand`, `flatten`, `document`, `toRdf`, `fromRdf`, `serializeNQuads`, `parseNQuads` |
+| `ExpandOptions` | `base`, `documentUrl`, `expandContext`, `loader` |
+| `Expander`, `Flattener` | The algorithms behind the facade |
+| `Iri` | RFC 3986 parsing and relative reference resolution |
+| `Loader\ContextLoaderInterface` | How remote contexts are fetched; `InlineContextLoader` (default, no I/O), `PsrContextLoader` (PSR-18, URL policy, size limit) |
+| `Graph\Document`, `Graph`, `Node` | Node API over the expanded form |
+| `Rdf\Dataset`, `Quad`, `Iri`, `BlankNode`, `Literal`, `NQuads` | RDF model; `Dataset::equals()` compares up to blank node renaming |
+| `Exception\*` | Every message is the W3C error code (`invalid @id value`, ...) |
+
+Supported: expansion, flattening, RDF conversion (`toRdf`/`fromRdf`, native types,
+`rdfDirection` `i18n-datatype` and `compound-literal`, JSON literals with JCS),
+scoped contexts, `@protected`, `@import`, `@propagate`, `@nest`, `@included`,
+all container types. Not implemented: compaction, framing, the 1.0 processing mode.
 
 ## Security
 
-<!-- Describe what is safe and what requires caution.
-For this package:
-- Remote context loading happens only through an explicitly injected
-  ContextLoaderInterface implementation; the default loader never touches
-  network or filesystem
--->
+- **No implicit I/O.** The default loader never touches the network or the filesystem:
+  a remote `@context` fails with `loading remote context failed` unless you inject a
+  `ContextLoaderInterface`.
+- `PsrContextLoader` takes an optional URL policy (`Closure(string): bool`) and a body size
+  limit (default 1 MiB). Treat documents as untrusted: allow-list hosts, refuse private
+  ranges, set timeouts on the PSR-18 client.
+- Expansion depth is capped at 512 levels and remote context chains at 64. Cap the raw
+  document size yourself before decoding it.
 
 ## Examples
 
-See [examples/](examples/) for runnable scripts.
+Runnable scripts (no network) in [examples/](examples/):
+
+| Script | Shows |
+|---|---|
+| [`expand_article.php`](examples/expand_article.php) | expanding a schema.org Article/VideoObject `@graph` |
+| [`context_features.php`](examples/context_features.php) | prefixes, `@vocab`, keyword aliases, `@container` |
+| [`loaders.php`](examples/loaders.php) | the default loader refuses URLs; injecting a loader; unknown context error |
+| [`flatten_node_api.php`](examples/flatten_node_api.php) | `flatten` and the node API on the same document |
+| [`rdf.php`](examples/rdf.php) | `toRdf`, N-Quads, `fromRdf` round trip |
+| [`html_script.php`](examples/html_script.php) | extracting `application/ld+json` blocks from a page |
+
 Examples are expected to execute without fatal errors and stay aligned with the
 documented public API.
+
+## AI agent skill
+
+The package ships an agent skill: [`resources/skills/rasuvaeff-json-ld/SKILL.md`](resources/skills/rasuvaeff-json-ld/SKILL.md)
+(distributed through `extra.skills`).
+
+## Conformance
+
+The W3C JSON-LD API test suite (expand, flatten, toRdf, fromRdf) is vendored under
+`tests/fixtures/w3c` and run in full, except tests of the 1.0 processing mode and one
+compaction-dependent case. The test data belongs to the W3C and is used under the
+[W3C Test Suite License and 3-clause BSD License](tests/fixtures/w3c/LICENSE.md)
+(Copyright W3C and the JSON-LD Working Group).
 
 ## Development
 

@@ -20,6 +20,11 @@ converts to RDF graphs serialized as N-Quads.
    network or filesystem beyond parsing in-memory data.
 4. **Preserve the public contract.** Update README + tests with any API change.
 
+## Agent skill
+
+The package ships `resources/skills/rasuvaeff-json-ld/SKILL.md` (distributed via
+`extra.skills`); keep its safety rules in sync with the code.
+
 ## Commands
 
 No PHP/Composer on the host — run in Docker via the `composer:2` image.
@@ -50,6 +55,10 @@ make release-check
 
 ## Invariants & gotchas
 
+- W3C suite (`tests/fixtures/w3c`): the `Unit` suite runs expand, flatten, toRdf and
+  fromRdf; JSON-LD 1.0 cases (`processingMode`/`specVersion` json-ld-1.0) are not run
+  (see `W3cManifest`), the remaining skips live in the `SKIPPED` constants of the
+  `W3c*Test` classes with their reasons.
 - Remote context loading is opt-in: the processor receives documents as
   in-memory data; anything hitting the network goes through an explicitly
   injected `ContextLoaderInterface` and never happens as a side effect of

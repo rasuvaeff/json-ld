@@ -52,11 +52,17 @@ final class Expander
         $documentUrl = $options->documentUrl;
 
         if (is_string($input)) {
-            $loaded = $options->loader->load($input);
-            $input = $loaded->document;
+            $trimmed = ltrim($input);
 
-            if ($loaded->documentUrl !== '' && $documentUrl === null) {
-                $documentUrl = $loaded->documentUrl;
+            if ($trimmed !== '' && ($trimmed[0] === '{' || $trimmed[0] === '[')) {
+                $input = Json::decode($input);
+            } else {
+                $loaded = $options->loader->load($input);
+                $input = $loaded->document;
+
+                if ($loaded->documentUrl !== '' && $documentUrl === null) {
+                    $documentUrl = $loaded->documentUrl;
+                }
             }
         }
 
