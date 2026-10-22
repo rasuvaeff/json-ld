@@ -66,6 +66,13 @@ final class IriExpansion
                 return $prefixDefinition->iriMapping . substr($value, $colon + 1);
             }
 
+            // A blank-node prefix concatenates without the colon.
+            if ($prefixDefinition !== null && $prefixDefinition->iriMapping !== null
+                && str_starts_with($prefixDefinition->iriMapping, '_:')
+            ) {
+                return $prefixDefinition->iriMapping . substr($value, $colon + 1);
+            }
+
             if (self::hasValidScheme($prefix)) {
                 // An absolute IRI is returned as is, without dot-segment
                 // removal (JSON-LD IRI expansion, not RFC merge).

@@ -34,7 +34,9 @@ final readonly class ProcessOptions
 
     public function withScoped(): self
     {
-        return new self($this->loader, $this->base, $this->overrideProtected, $this->propagate, $this->remoteContexts, $this->depth, true);
+        // A scoped activation starts with a fresh remote-context set: a
+        // scoped context may include itself.
+        return new self($this->loader, $this->base, $this->overrideProtected, $this->propagate, [], $this->depth, true);
     }
 
     public function withoutPropagation(): self

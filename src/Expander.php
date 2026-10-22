@@ -532,8 +532,15 @@ final class Expander
             }
         }
 
-        foreach ($reverseMap as $property => $propertyValue) {
-            $this->addValue($result, $property, $propertyValue, true);
+        if ($reverseMap !== []) {
+            /** @var array<string, mixed> $reverse */
+            $reverse = $result[Keywords::REVERSE] ?? [];
+
+            foreach ($reverseMap as $property => $propertyValue) {
+                $this->addValue($reverse, $property, $propertyValue, true);
+            }
+
+            $result[Keywords::REVERSE] = $reverse;
         }
     }
 
@@ -697,7 +704,7 @@ final class Expander
             }
         }
 
-        return $result;
+        return $result === [] ? null : $result;
     }
 
     /**
