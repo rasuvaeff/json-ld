@@ -328,6 +328,11 @@ final class Expander
             return null;
         }
 
+        // A non-empty object that expanded to nothing carries no data.
+        if ($result === [] && $element !== []) {
+            return null;
+        }
+
         return $result;
     }
 
@@ -422,6 +427,10 @@ final class Expander
                     throw new InvalidContextException('list of lists');
                 }
 
+                if ($activeProperty === null) {
+                    break;
+                }
+
                 $expanded = $this->expandElement(
                     $context,
                     $activeProperty,
@@ -493,6 +502,8 @@ final class Expander
 
         /** @var array<string, mixed> $reverseMap */
         $reverseMap = [];
+        /** @var array<string, mixed> $forward */
+        $forward = [];
 
         foreach ($value as $property => $propertyValue) {
             if ($property === Keywords::CONTEXT) {
@@ -512,6 +523,29 @@ final class Expander
             if ($expandedProperty === null
                 || (!IriExpansion::isAbsolute($expandedProperty) && !str_starts_with($expandedProperty, '_:'))
             ) {
+                continue;
+            }
+
+            $propertyDefinition = $this->lookupTerm($context, (string) $property);
+
+            if ($propertyDefinition?->reverse) {
+                // A reverse term inside a @reverse map applies forward.
+                $expanded = $this->expandElement(
+                    $context,
+                    $expandedProperty,
+                    $propertyDefinition,
+                    $propertyValue,
+                    new ExpansionState(loader: $state->loader),
+                );
+
+                foreach (is_array($expanded) && array_is_list($expanded) ? $expanded : [$expanded] as $node) {
+                    if (!is_array($node) || array_is_list($node) || array_key_exists(Keywords::VALUE, $node)) {
+                        throw new InvalidContextException('invalid reverse property value');
+                    }
+
+                    $this->addValue($forward, $expandedProperty, $node, true);
+                }
+
                 continue;
             }
 
@@ -541,6 +575,10 @@ final class Expander
             }
 
             $result[Keywords::REVERSE] = $reverse;
+        }
+
+        foreach ($forward as $property => $propertyValue) {
+            $this->addValue($result, $property, $propertyValue, true);
         }
     }
 
@@ -1120,7 +1158,8 @@ final class Expander
 
                     $expanded = $type === Keywords::ID
                         ? IriExpansion::expand($context, $value, documentRelative: true)
-                        : IriExpansion::expand($context, $value, vocab: true);
+                        : (IriExpansion::expand($context, $value, vocab: true)
+                            ?? IriExpansion::expand($context, $value, documentRelative: true));
 
                     return $expanded === null || $expanded === '' ? [] : [Keywords::ID => $expanded];
                 }

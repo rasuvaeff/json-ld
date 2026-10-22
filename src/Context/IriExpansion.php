@@ -34,14 +34,16 @@ final class IriExpansion
             return $value;
         }
 
-        $definition = $context->term($value);
+        if ($vocab) {
+            $definition = $context->term($value);
 
-        if ($definition !== null) {
-            return $definition->keyword ?? $definition->iriMapping;
-        }
+            if ($definition !== null) {
+                return $definition->keyword ?? $definition->iriMapping;
+            }
 
-        if ($context->isMapped($value)) {
-            return null;
+            if ($context->isMapped($value)) {
+                return null;
+            }
         }
 
         $colon = strpos($value, ':');

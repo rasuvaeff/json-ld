@@ -26,7 +26,7 @@ foreach ((new W3cManifest())->cases($suite) as $name => $case) {
     if ($suite === 'expand') {
         try {
             $got = W3cExpandTest::canonical(JsonLd::expand((array) $case['input'], $opts));
-        } catch (JsonLdException $e) {
+        } catch (Throwable $e) {
             if ($e->getMessage() === $case['expectedError']) {
                 continue;
             }
