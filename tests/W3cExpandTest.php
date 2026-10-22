@@ -36,6 +36,7 @@ final class W3cExpandTest
             base: $base,
             expandContext: $expandContext,
             loader: new FixtureContextLoader(),
+            documentUrl: $documentUrl,
         );
 
         if ($expectedError !== null) {
@@ -71,6 +72,7 @@ final class W3cExpandTest
                 $case['expectedError'],
                 $case['base'],
                 $case['expandContext'],
+                $case['documentUrl'],
             ];
         }
     }

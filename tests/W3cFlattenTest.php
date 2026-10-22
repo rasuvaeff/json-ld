@@ -20,12 +20,13 @@ use Testo\Test;
 final class W3cFlattenTest
 {
     #[DataProvider('suiteProvider')]
-    public function case(mixed $input, mixed $expected, ?string $expectedError, ?string $base, mixed $expandContext, array $option): void
+    public function case(mixed $input, mixed $expected, ?string $expectedError, ?string $base, mixed $expandContext, ?string $documentUrl, array $option): void
     {
         $options = new ExpandOptions(
             base: $base,
             expandContext: $expandContext,
             loader: new FixtureContextLoader(),
+            documentUrl: $documentUrl,
         );
 
         if ($expectedError !== null) {
@@ -56,6 +57,7 @@ final class W3cFlattenTest
                 $case['expectedError'],
                 $case['base'],
                 $case['expandContext'],
+                $case['documentUrl'],
                 $case['option'],
             ];
         }

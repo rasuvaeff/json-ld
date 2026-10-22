@@ -31,5 +31,11 @@ final readonly class ExpandOptions
          * that does.
          */
         public ContextLoaderInterface $loader = new InlineContextLoader(),
+        /**
+         * Location of the document itself: relative context references
+         * resolve against it even when `base` redirects IRI resolution
+         * elsewhere.
+         */
+        public ?string $documentUrl = null,
     ) {}
 }

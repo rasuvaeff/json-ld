@@ -27,12 +27,13 @@ final class W3cToRdfTest
     private const array SKIPPED = ['i18n-datatype', 'compound literal', 'compound-literal', 'e120', 'e121'];
 
     #[DataProvider('suiteProvider')]
-    public function case(mixed $input, mixed $expected, ?string $expectedError, ?string $base, mixed $expandContext, bool $syntaxOnly, bool $generalizedRdf): void
+    public function case(mixed $input, mixed $expected, ?string $expectedError, ?string $base, mixed $expandContext, ?string $documentUrl, bool $syntaxOnly, bool $generalizedRdf): void
     {
         $options = new ExpandOptions(
             base: $base,
             expandContext: $expandContext,
             loader: new FixtureContextLoader(),
+            documentUrl: $documentUrl,
         );
 
         if ($expectedError !== null) {
@@ -77,6 +78,7 @@ final class W3cToRdfTest
                 $case['expectedError'],
                 $case['base'],
                 $case['expandContext'],
+                $case['documentUrl'],
                 $case['syntaxOnly'],
                 ($case['option']['produceGeneralizedRdf'] ?? false) === true,
             ];

@@ -71,6 +71,7 @@ final readonly class W3cManifest
                 'expected' => $expected,
                 'expectedError' => $expectedError,
                 'base' => $this->base($option, is_string($inputPath) ? $inputPath : null),
+                'documentUrl' => is_string($inputPath) ? FixtureContextLoader::BASE_IRI . $inputPath : null,
                 'expandContext' => isset($option['expandContext']) ? $this->load($option['expandContext']) : null,
                 'processingMode' => $processingMode,
                 'syntaxOnly' => $syntaxOnly,

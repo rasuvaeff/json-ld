@@ -57,8 +57,37 @@ final class Expander
             $processOptions = new ProcessOptions(loader: $options->loader, base: $context->base);
         }
 
-        // The document's own @context is processed when the top-level node
-        // object is expanded; pre-processing here would apply it twice.
+        // The document's own @context is processed here against the
+        // document location (not `base`, which may differ), then removed
+        // from the input so the node expansion does not apply it twice.
+        if (is_array($input) && !array_is_list($input) && array_key_exists(Keywords::CONTEXT, $input)) {
+            $contextBase = $options->documentUrl ?? $options->base;
+
+            $context = $this->processor->process(
+                $context,
+                $input[Keywords::CONTEXT],
+                new ProcessOptions(loader: $options->loader, base: $contextBase !== null ? Iri::of($contextBase) : null),
+            );
+
+            unset($input[Keywords::CONTEXT]);
+
+            // An explicit @base from the context wins over the options base.
+            $contextSetBase = $context->base !== null
+                && $contextBase !== null
+                && (string) $context->base !== $contextBase;
+
+            if ($options->base !== null && !$contextSetBase) {
+                $context = new ActiveContext(
+                    base: Iri::of($options->base),
+                    vocab: $context->vocab,
+                    language: $context->language,
+                    direction: $context->direction,
+                    terms: $context->terms,
+                    keywordAliases: $context->keywordAliases,
+                    aliasesByKeyword: $context->aliasesByKeyword,
+                );
+            }
+        }
 
         $expanded = $this->expandElement($context, null, null, $input, new ExpansionState(loader: $options->loader));
 
