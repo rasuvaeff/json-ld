@@ -7,8 +7,8 @@ namespace Rasuvaeff\JsonLd\Rdf;
 use Rasuvaeff\JsonLd\BlankNodeGenerator;
 use Rasuvaeff\JsonLd\Expander;
 use Rasuvaeff\JsonLd\ExpandOptions;
-use Rasuvaeff\JsonLd\Keywords;
 use Rasuvaeff\JsonLd\Json;
+use Rasuvaeff\JsonLd\Keywords;
 
 /**
  * RDF serialization of expanded documents, JSON-LD 1.1 API section 5.2

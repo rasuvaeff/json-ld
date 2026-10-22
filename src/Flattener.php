@@ -43,7 +43,7 @@ final class Flattener
 
         usort(
             $nodes,
-            static fn (array $left, array $right): int => self::compareSubjects(
+            static fn(array $left, array $right): int => self::compareSubjects(
                 (string) ($left[Keywords::ID] ?? ''),
                 (string) ($right[Keywords::ID] ?? ''),
             ),

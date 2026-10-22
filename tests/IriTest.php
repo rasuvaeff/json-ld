@@ -152,7 +152,7 @@ final class IriTest
     public function resolvedPathHasNoDotSegments(string $reference, string $base): void
     {
         $resolved = Iri::of($base)->resolve(Iri::of($reference));
-        $segments = array_filter(explode('/', $resolved->path), static fn (string $s): bool => $s !== '');
+        $segments = array_filter(explode('/', $resolved->path), static fn(string $s): bool => $s !== '');
 
         Assert::false(in_array('.', $segments, true));
         Assert::false(in_array('..', $segments, true));
@@ -168,12 +168,12 @@ final class IriTest
         ]);
 
         $path = Gen::map(
-            static fn (array $parts): string => implode('/', $parts),
+            static fn(array $parts): string => implode('/', $parts),
             Gen::nonEmptyArrayOf($segments, maxSize: 4),
         );
 
         return [
-            'reference' => Gen::frequency([[1, $path], [1, Gen::map($path, static fn (string $p): string => '/' . $p)]]),
+            'reference' => Gen::frequency([[1, $path], [1, Gen::map($path, static fn(string $p): string => '/' . $p)]]),
             'base' => self::absoluteIri(),
         ];
     }
@@ -195,14 +195,14 @@ final class IriTest
     private static function absoluteIri(): \Rasuvaeff\PropertyTesting\ArbitraryInterface
     {
         $host = Gen::map(
-            static fn (array $parts): string => implode('.', $parts),
+            static fn(array $parts): string => implode('.', $parts),
             Gen::nonEmptyArrayOf(Gen::stringFrom('abcdefghij', maxSize: 8), minLength: 1, maxLength: 3),
         );
 
         $segment = Gen::stringFrom('abcdefghij0123456789;=,', minLength: 0, maxLength: 6);
 
         $path = Gen::map(
-            static fn (array $parts): string => '/' . implode('/', $parts),
+            static fn(array $parts): string => '/' . implode('/', $parts),
             Gen::arrayOf($segment, minSize: 0, maxSize: 3),
         );
 
@@ -211,7 +211,7 @@ final class IriTest
         $fragment = Gen::nullable(Gen::stringFrom('abc012', minLength: 0, maxLength: 4));
 
         return Gen::flatMap(
-            static fn (array $parts): \Rasuvaeff\PropertyTesting\ArbitraryInterface => Gen::constant(
+            static fn(array $parts): \Rasuvaeff\PropertyTesting\ArbitraryInterface => Gen::constant(
                 'http://' . $parts['host'] . $parts['path']
                 . ($parts['query'] !== null ? '?' . $parts['query'] : '')
                 . ($parts['fragment'] !== null ? '#' . $parts['fragment'] : ''),

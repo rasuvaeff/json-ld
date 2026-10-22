@@ -25,12 +25,12 @@ final readonly class JsonLdDocuments
     {
         return Gen::flatMap(
             self::context(),
-            static fn (array $context): ArbitraryInterface => Gen::map(
+            static fn(array $context): ArbitraryInterface => Gen::map(
                 Gen::record([
                     'context' => Gen::constant($context),
                     'nodes' => Gen::nonEmptyArrayOf(self::node($context), maxSize: 3),
                 ]),
-                static fn (array $doc): array => self::normalize($doc),
+                static fn(array $doc): array => self::normalize($doc),
             ),
         );
     }
@@ -44,7 +44,7 @@ final readonly class JsonLdDocuments
 
         $simple = Gen::map(
             Gen::stringFrom('abcdefghij', minLength: 2, maxLength: 6),
-            static fn (string $t): array => ['@id' => 'http://example.com/vocab/' . $t],
+            static fn(string $t): array => ['@id' => 'http://example.com/vocab/' . $t],
         );
 
         $typed = Gen::map(
@@ -52,7 +52,7 @@ final readonly class JsonLdDocuments
                 'iri' => Gen::stringFrom('abcdefghij', minLength: 2, maxLength: 6),
                 'type' => Gen::elements(['@id', 'http://example.com/typed']),
             ]),
-            static fn (array $t): array => ['@id' => 'http://example.com/vocab/' . $t['iri'], '@type' => $t['type']],
+            static fn(array $t): array => ['@id' => 'http://example.com/vocab/' . $t['iri'], '@type' => $t['type']],
         );
 
         $terms = Gen::dictOf(
@@ -104,17 +104,17 @@ final readonly class JsonLdDocuments
     {
         $terms = array_values(array_filter(
             array_keys($context),
-            static fn (string $key): bool => !str_starts_with($key, '@') && !in_array($key, ['vocab', 'language'], true),
+            static fn(string $key): bool => !str_starts_with($key, '@') && !in_array($key, ['vocab', 'language'], true),
         ));
 
         $id = Gen::frequency([
             [2, Gen::map(
                 Gen::stringFrom('abcdefghij0123456789', minLength: 1, maxLength: 8),
-                static fn (string $s): string => 'http://example.com/resource/' . $s,
+                static fn(string $s): string => 'http://example.com/resource/' . $s,
             )],
             [1, Gen::map(
                 Gen::stringFrom('abcdefghij', minLength: 1, maxLength: 6),
-                static fn (string $s): string => '_:' . $s,
+                static fn(string $s): string => '_:' . $s,
             )],
         ]);
 
@@ -161,7 +161,7 @@ final readonly class JsonLdDocuments
     public static function propertyValue(array $context): ArbitraryInterface
     {
         $coercions = array_map(
-            static fn (mixed $definition): ?string => is_array($definition) && isset($definition['@type'])
+            static fn(mixed $definition): ?string => is_array($definition) && isset($definition['@type'])
                 ? $definition['@type']
                 : null,
             $context,
@@ -174,11 +174,11 @@ final readonly class JsonLdDocuments
                     'text' => Gen::stringFrom('abcdefghij', minLength: 1, maxLength: 8),
                     'lang' => Gen::elements(['en', 'de', 'ru']),
                 ]),
-                static fn (array $v): array => ['@value' => $v['text'], '@language' => $v['lang']],
+                static fn(array $v): array => ['@value' => $v['text'], '@language' => $v['lang']],
             )],
             [1, Gen::map(
                 Gen::stringFrom('abcdefghij', minLength: 1, maxLength: 8),
-                static fn (string $s): array => ['@id' => 'http://example.com/resource/' . $s],
+                static fn(string $s): array => ['@id' => 'http://example.com/resource/' . $s],
             )],
         ]);
     }

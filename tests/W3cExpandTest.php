@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Rasuvaeff\JsonLd\Tests;
 
-use Rasuvaeff\JsonLd\ExpandOptions;
 use Rasuvaeff\JsonLd\Exception\JsonLdException;
 use Rasuvaeff\JsonLd\Expander;
+use Rasuvaeff\JsonLd\ExpandOptions;
 use Rasuvaeff\JsonLd\Json;
 use Rasuvaeff\JsonLd\JsonLd;
 use Rasuvaeff\JsonLd\Keywords;
@@ -92,10 +92,10 @@ final class W3cExpandTest
         }
 
         if (array_is_list($value)) {
-            $items = array_map(static fn (mixed $item): mixed => self::sorted($item, ordered: false), $value);
+            $items = array_map(static fn(mixed $item): mixed => self::sorted($item, ordered: false), $value);
 
             if (!$ordered) {
-                usort($items, static fn (mixed $a, mixed $b): int => strcmp(Json::encode($a), Json::encode($b)));
+                usort($items, static fn(mixed $a, mixed $b): int => strcmp(Json::encode($a), Json::encode($b)));
             }
 
             return $items;

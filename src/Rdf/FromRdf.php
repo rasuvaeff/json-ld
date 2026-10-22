@@ -192,7 +192,7 @@ final class FromRdf
         // A head is a list start only when nothing points at it with rdf:rest.
         return array_filter(
             $heads,
-            static fn (string $subjectKey): bool => !isset($restTargets[$subjectKey]),
+            static fn(string $subjectKey): bool => !isset($restTargets[$subjectKey]),
             ARRAY_FILTER_USE_KEY,
         );
     }

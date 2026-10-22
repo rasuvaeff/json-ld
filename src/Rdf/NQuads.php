@@ -152,7 +152,7 @@ final class NQuads
         if (preg_match('~[^\x20-\x7E]~u', $escaped) === 1 || preg_match('~[\x00-\x1F]~', $escaped) === 1) {
             $escaped = preg_replace_callback(
                 '~[\x00-\x1F]|[\x7F]~',
-                static fn (array $m): string => sprintf('\\u%04X', ord($m[0])),
+                static fn(array $m): string => sprintf('\\u%04X', ord($m[0])),
                 $escaped,
             ) ?? $escaped;
         }

@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Rasuvaeff\JsonLd\Tests\Support;
 
 use Rasuvaeff\JsonLd\Exception\DocumentLoadingException;
+use Rasuvaeff\JsonLd\Json;
 use Rasuvaeff\JsonLd\Loader\ContextLoaderInterface;
 use Rasuvaeff\JsonLd\Loader\LoadedContext;
-use Rasuvaeff\JsonLd\Json;
 
 /**
  * Serves W3C test-suite documents from the vendored fixtures directory.

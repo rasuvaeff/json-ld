@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Rasuvaeff\JsonLd\Tests;
 
-use Rasuvaeff\JsonLd\ExpandOptions;
 use Rasuvaeff\JsonLd\Exception\JsonLdException;
+use Rasuvaeff\JsonLd\ExpandOptions;
 use Rasuvaeff\JsonLd\Flattener;
 use Rasuvaeff\JsonLd\JsonLd;
 use Rasuvaeff\JsonLd\Tests\Support\FixtureContextLoader;

@@ -95,7 +95,7 @@ final class LawsPropertyTest
     {
         $iri = Gen::map(
             Gen::stringFrom('abcdefghij', minLength: 1, maxLength: 8),
-            static fn (string $s): string => '<http://example.com/' . $s . '>',
+            static fn(string $s): string => '<http://example.com/' . $s . '>',
         );
 
         $literal = Gen::map(
@@ -103,19 +103,19 @@ final class LawsPropertyTest
                 'text' => Gen::stringFrom('abcdefghij ', minLength: 0, maxLength: 10),
                 'lang' => Gen::nullable(Gen::elements(['en', 'de'])),
             ]),
-            static fn (array $l): string => '"' . $l['text'] . '"'
+            static fn(array $l): string => '"' . $l['text'] . '"'
                 . ($l['lang'] !== null ? '@' . $l['lang'] : '^^<http://www.w3.org/2001/XMLSchema#string>'),
         );
 
         $quad = Gen::map(
             Gen::record(['s' => $iri, 'p' => $iri, 'o' => Gen::frequency([[1, $iri], [1, $literal]])]),
-            static fn (array $q): string => $q['s'] . ' ' . $q['p'] . ' ' . $q['o'] . ' .',
+            static fn(array $q): string => $q['s'] . ' ' . $q['p'] . ' ' . $q['o'] . ' .',
         );
 
         return [
             'quads' => Gen::map(
                 Gen::nonEmptyArrayOf($quad, maxSize: 6),
-                static fn (array $lines): string => implode("\n", $lines),
+                static fn(array $lines): string => implode("\n", $lines),
             ),
         ];
     }

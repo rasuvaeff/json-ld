@@ -4,11 +4,7 @@ declare(strict_types=1);
 
 namespace Rasuvaeff\JsonLd\Context;
 
-use Rasuvaeff\JsonLd\Exception\ContextRecursionException;
-use Rasuvaeff\JsonLd\Exception\DocumentLoadingException;
-use Rasuvaeff\JsonLd\Exception\InvalidContextException;
 use Rasuvaeff\JsonLd\Iri;
-use Rasuvaeff\JsonLd\Keywords;
 use Rasuvaeff\JsonLd\Loader\ContextLoaderInterface;
 
 /**

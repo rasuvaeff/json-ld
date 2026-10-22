@@ -196,7 +196,7 @@ final class Expander
             if ($keyword !== null) {
                 if ($keyword === Keywords::CONTEXT) {
                     continue;
-               }
+                }
 
                 if ($keyword === Keywords::NEST) {
                     $nests[] = $key;
