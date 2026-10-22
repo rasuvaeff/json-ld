@@ -305,7 +305,7 @@ final class Expander
 
             $this->expandPropertyMember(
                 $context,
-                $key,
+                (string) $key,
                 $value,
                 $result,
                 $state,
@@ -953,7 +953,7 @@ final class Expander
                     continue;
                 }
 
-                $this->expandPropertyMember($context, $key, $value, $result, $state);
+                $this->expandPropertyMember($context, (string) $key, $value, $result, $state);
             }
         }
     }
