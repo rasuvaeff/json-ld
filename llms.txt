@@ -1,0 +1,20 @@
+# json-ld
+
+Install: `composer require rasuvaeff/json-ld`
+
+Runtime deps: `ext-json`, `ext-mbstring`, `ext-dom`, `psr/http-client ^1.0`,
+`psr/http-factory ^1.0`, `psr/http-message (^1.0 || ^2.0)`.
+
+## Rules
+
+- PHP 8.3+, `declare(strict_types=1)`
+- Immutable by default (`final readonly class`)
+- No implicit I/O: remote context loading happens only through an explicitly
+  injected `ContextLoaderInterface` implementation; the default loader never
+  touches network or filesystem beyond parsing in-memory data
+- <!-- Add package-specific rules here -->
+
+## API
+
+<!-- For each public class, provide a self-contained example.
+The goal: an LLM can use the package correctly from this file alone. -->
