@@ -612,16 +612,6 @@ final class ContextProcessor
             }
         }
 
-        if ($keyword !== null) {
-            $currentAlias = $builder->aliasFor($keyword);
-
-            if ($currentAlias !== null && $currentAlias !== $term) {
-                throw new InvalidContextException('colliding keywords');
-            }
-
-            $builder->alias($term, $keyword);
-        }
-
         $builder->setTerm(
             $term,
             new TermDefinition(
@@ -639,6 +629,16 @@ final class ContextProcessor
                 localContext: $scopedContext,
             ),
         );
+
+        if ($keyword !== null) {
+            $currentAlias = $builder->aliasFor($keyword);
+
+            if ($currentAlias !== null && $currentAlias !== $term) {
+                throw new InvalidContextException('colliding keywords');
+            }
+
+            $builder->alias($term, $keyword);
+        }
 
         $defined[$term] = true;
     }
