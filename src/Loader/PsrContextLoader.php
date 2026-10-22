@@ -47,7 +47,7 @@ final readonly class PsrContextLoader implements ContextLoaderInterface
             throw new DocumentLoadingException(sprintf('Only http and https references can be loaded, "%s" given', $reference));
         }
 
-        if ($this->urlPolicy !== null && !($this->urlPolicy)($reference)) {
+        if ($this->urlPolicy instanceof \Closure && !($this->urlPolicy)($reference)) {
             throw new DocumentLoadingException(sprintf('The URL policy refused "%s"', $reference));
         }
 
@@ -58,7 +58,7 @@ final readonly class PsrContextLoader implements ContextLoaderInterface
         try {
             $response = $this->client->sendRequest($request);
         } catch (ClientExceptionInterface $exception) {
-            throw new DocumentLoadingException($exception->getMessage(), previous: $exception);
+            throw new DocumentLoadingException($exception->getMessage(), $exception->getCode(), previous: $exception);
         }
 
         if ($response->getStatusCode() >= 400) {
@@ -82,10 +82,7 @@ final readonly class PsrContextLoader implements ContextLoaderInterface
         try {
             return new LoadedContext(documentUrl: $reference, document: Json::decode($body));
         } catch (InvalidJsonException $exception) {
-            throw new DocumentLoadingException(
-                sprintf('Response of "%s" is not a JSON document', $reference),
-                previous: $exception,
-            );
+            throw new DocumentLoadingException(sprintf('Response of "%s" is not a JSON document', $reference), $exception->getCode(), previous: $exception);
         }
     }
 }

@@ -31,7 +31,7 @@ final class Json
         try {
             $decoded = json_decode(json: $json, associative: true, depth: 512, flags: JSON_THROW_ON_ERROR);
         } catch (JsonException $exception) {
-            throw new InvalidJsonException($exception->getMessage(), previous: $exception);
+            throw new InvalidJsonException($exception->getMessage(), $exception->getCode(), previous: $exception);
         }
 
         if (!is_array($decoded)) {
@@ -57,7 +57,7 @@ final class Json
         try {
             return json_encode($value, $flags | JSON_THROW_ON_ERROR);
         } catch (JsonException $exception) {
-            throw new InvalidJsonException($exception->getMessage(), previous: $exception);
+            throw new InvalidJsonException($exception->getMessage(), $exception->getCode(), previous: $exception);
         }
     }
 }

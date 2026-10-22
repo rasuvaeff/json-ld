@@ -69,6 +69,6 @@ final readonly class TermDefinition
 
     public function sameAs(self $other): bool
     {
-        return $this->withProtected(false) == $other->withProtected(false);
+        return $this->withProtected(protected: false) == $other->withProtected(protected: false);
     }
 }

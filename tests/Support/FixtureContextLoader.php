@@ -54,7 +54,6 @@ final readonly class FixtureContextLoader implements ContextLoaderInterface
         return new LoadedContext(
             documentUrl: $reference,
             document: Json::decode($contents),
-            contextUrl: null,
         );
     }
 }

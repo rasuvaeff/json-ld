@@ -30,7 +30,7 @@ final class W3cFlattenTest
     ];
 
     #[DataProvider('suiteProvider')]
-    public function case(mixed $input, mixed $expected, ?string $expectedError, ?string $base, mixed $expandContext, ?string $documentUrl, array $option): void
+    public function case(mixed $input, mixed $expected, ?string $expectedError, ?string $base, mixed $expandContext, ?string $documentUrl): void
     {
         $options = new ExpandOptions(
             base: $base,

@@ -213,7 +213,7 @@ final class NodeMap
         /** @var list<JsonValue> $values */
         $values = $this->graphs[$graph][$subject][$property] ?? [];
 
-        if (!$unique || !self::contains($values, $value)) {
+        if (!$unique || !$this->contains($values, $value)) {
             $values[] = $value;
         }
 
@@ -224,7 +224,7 @@ final class NodeMap
      * @param list<JsonValue> $haystack
      * @param JsonValue $needle
      */
-    private static function contains(array $haystack, mixed $needle): bool
+    private function contains(array $haystack, mixed $needle): bool
     {
         foreach ($haystack as $item) {
             if (self::sameJson($item, $needle)) {

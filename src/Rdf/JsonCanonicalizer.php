@@ -44,10 +44,7 @@ final class JsonCanonicalizer
         $keys = array_map(strval(...), array_keys($value));
         usort(
             $keys,
-            static fn(string $left, string $right): int => strcmp(
-                (string) mb_convert_encoding($left, 'UTF-16BE', 'UTF-8'),
-                (string) mb_convert_encoding($right, 'UTF-16BE', 'UTF-8'),
-            ),
+            static fn(string $left, string $right): int => strcmp(self::utf16($left), self::utf16($right)),
         );
 
         $members = [];
@@ -57,6 +54,13 @@ final class JsonCanonicalizer
         }
 
         return '{' . implode(',', $members) . '}';
+    }
+
+    private static function utf16(string $value): string
+    {
+        $converted = mb_convert_encoding($value, 'UTF-16BE', 'UTF-8');
+
+        return $converted === false ? '' : $converted;
     }
 
     private static function string(string $value): string

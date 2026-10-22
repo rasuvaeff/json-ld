@@ -48,8 +48,8 @@ final readonly class W3cManifest
 
             $types = is_array($case['@type'] ?? null) ? $case['@type'] : [];
 
-            $negative = in_array('jld:NegativeEvaluationTest', $types, true);
-            $syntaxOnly = in_array('jld:PositiveSyntaxTest', $types, true);
+            $negative = in_array('jld:NegativeEvaluationTest', $types, strict: true);
+            $syntaxOnly = in_array('jld:PositiveSyntaxTest', $types, strict: true);
 
             $input = $this->load($case['input'] ?? '');
             $expected = null;

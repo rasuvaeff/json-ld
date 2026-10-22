@@ -22,7 +22,7 @@ use Rasuvaeff\JsonLd\NodeMap;
  *
  * @psalm-import-type JsonValue from \Rasuvaeff\JsonLd\Json
  */
-final class ToRdf
+final readonly class ToRdf
 {
     public const string I18N = 'https://www.w3.org/ns/i18n#';
 
@@ -42,9 +42,9 @@ final class ToRdf
      * @param string|null $rdfDirection `i18n-datatype`, `compound-literal` or null (base direction is dropped)
      */
     public function __construct(
-        private readonly Expander $expander = new Expander(),
-        private readonly bool $produceGeneralizedRdf = false,
-        private readonly ?string $rdfDirection = null,
+        private Expander $expander = new Expander(),
+        private bool $produceGeneralizedRdf = false,
+        private ?string $rdfDirection = null,
     ) {}
 
     /**
@@ -63,8 +63,8 @@ final class ToRdf
 
             if ($name === Keywords::DEFAULT_GRAPH) {
                 $graphTerm = null;
-            } elseif (self::wellFormed($name)) {
-                $graphTerm = self::node($name);
+            } elseif ($this->wellFormed($name)) {
+                $graphTerm = $this->node($name);
             } else {
                 continue;
             }
@@ -74,11 +74,11 @@ final class ToRdf
             foreach ($graph as $subject => $node) {
                 $subject = strval($subject);
 
-                if (!self::wellFormed($subject)) {
+                if (!$this->wellFormed($subject)) {
                     continue;
                 }
 
-                $subjectTerm = self::node($subject);
+                $subjectTerm = $this->node($subject);
                 $properties = array_map(strval(...), array_keys($node));
                 sort($properties, SORT_STRING);
 
@@ -95,8 +95,8 @@ final class ToRdf
                     if ($property === Keywords::TYPE) {
                         /** @var JsonValue $type */
                         foreach ($values as $type) {
-                            if (is_string($type) && self::wellFormed($type)) {
-                                $quads[] = new Quad($subjectTerm, new Iri(Literal::RDF_TYPE), self::node($type), $graphTerm);
+                            if (is_string($type) && $this->wellFormed($type)) {
+                                $quads[] = new Quad($subjectTerm, new Iri(Literal::RDF_TYPE), $this->node($type), $graphTerm);
                             }
                         }
 
@@ -111,7 +111,7 @@ final class ToRdf
                         continue;
                     }
 
-                    if (!self::wellFormed($property)) {
+                    if (!$this->wellFormed($property)) {
                         continue;
                     }
 
@@ -155,11 +155,11 @@ final class ToRdf
 
         $id = $item[Keywords::ID] ?? null;
 
-        if (!is_string($id) || !self::wellFormed($id)) {
+        if (!is_string($id) || !$this->wellFormed($id)) {
             return null;
         }
 
-        return self::node($id);
+        return $this->node($id);
     }
 
     /**
@@ -204,14 +204,14 @@ final class ToRdf
      * @param array<string, mixed> $item
      * @param list<Quad> $quads
      */
-    private function valueToRdf(array $item, array &$quads, Iri|BlankNode|null $graph, NodeMap $map): Iri|BlankNode|Literal|null
+    private function valueToRdf(array $item, array &$quads, Iri|BlankNode|null $graph, NodeMap $map): \Rasuvaeff\JsonLd\Rdf\BlankNode|\Rasuvaeff\JsonLd\Rdf\Literal|null
     {
         /** @var JsonValue $value */
         $value = $item[Keywords::VALUE];
         $datatype = $item[Keywords::TYPE] ?? null;
         $language = $item[Keywords::LANGUAGE] ?? null;
 
-        if ($datatype !== null && (!is_string($datatype) || ($datatype !== Keywords::JSON && !self::wellFormed($datatype)))) {
+        if ($datatype !== null && (!is_string($datatype) || ($datatype !== Keywords::JSON && !$this->wellFormed($datatype)))) {
             return null;
         }
 
@@ -227,7 +227,7 @@ final class ToRdf
             $lexical = $value ? 'true' : 'false';
             $datatype ??= self::XSD_BOOLEAN;
         } elseif ((is_float($value) && (fmod($value, 1.0) !== 0.0 || abs($value) >= 1e21)) || (is_int($value) || is_float($value)) && $datatype === self::XSD_DOUBLE) {
-            $lexical = self::doubleCanonical((float) $value);
+            $lexical = $this->doubleCanonical((float) $value);
             $datatype ??= self::XSD_DOUBLE;
         } elseif (is_int($value) || is_float($value)) {
             $lexical = is_int($value) ? (string) $value : sprintf('%.0f', $value);
@@ -263,12 +263,12 @@ final class ToRdf
         return Literal::typed($lexical, $datatype ?? Literal::XSD_STRING);
     }
 
-    private static function wellFormed(string $id): bool
+    private function wellFormed(string $id): bool
     {
         return Syntax::isBlankNode($id) || Syntax::isAbsoluteIri($id);
     }
 
-    private static function node(string $id): Iri|BlankNode
+    private function node(string $id): Iri|BlankNode
     {
         return Syntax::isBlankNode($id) ? new BlankNode(substr($id, 2)) : new Iri($id);
     }
@@ -277,7 +277,7 @@ final class ToRdf
      * XSD double canonical form: mantissa with at least one decimal digit,
      * exponent without leading zeros (`1.0E0`, `4.5E0`, `1.0E20`).
      */
-    private static function doubleCanonical(float $value): string
+    private function doubleCanonical(float $value): string
     {
         if ($value === 0.0) {
             return '0.0E0';

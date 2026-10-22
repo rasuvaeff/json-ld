@@ -59,7 +59,7 @@ final readonly class Node
 
     public function hasType(string $iri): bool
     {
-        return in_array($iri, $this->types(), true);
+        return in_array($iri, $this->types(), strict: true);
     }
 
     /**
@@ -134,7 +134,7 @@ final readonly class Node
             if (is_array($value) && !array_is_list($value) && isset($value['@id']) && is_string($value['@id'])) {
                 $node = $this->graph->node($value['@id']);
 
-                if ($node !== null) {
+                if ($node instanceof \Rasuvaeff\JsonLd\Graph\Node) {
                     $result[] = $node;
                 }
             }

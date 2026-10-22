@@ -93,8 +93,9 @@ final class Canonicalizer
     private static function refine(array $rows, array $colors): array
     {
         $classCount = count(array_unique($colors));
+        $counter = count($colors);
 
-        for ($round = 0; $round <= count($colors); $round++) {
+        for ($round = 0; $round <= $counter; $round++) {
             $signatures = array_fill_keys(array_keys($colors), []);
 
             foreach ($rows as $row) {

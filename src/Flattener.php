@@ -11,9 +11,9 @@ namespace Rasuvaeff\JsonLd;
  *
  * @api
  */
-final class Flattener
+final readonly class Flattener
 {
-    public function __construct(private readonly Expander $expander = new Expander()) {}
+    public function __construct(private Expander $expander = new Expander()) {}
 
     /**
      * Flattens a document given as decoded JSON or an inline JSON string.

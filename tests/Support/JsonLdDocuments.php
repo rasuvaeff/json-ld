@@ -81,7 +81,7 @@ final readonly class JsonLdDocuments
                 }
 
                 foreach ($c['terms'] as $term => $definition) {
-                    if (in_array($term, ['vocab', 'language'], true)) {
+                    if (in_array($term, ['vocab', 'language'], strict: true)) {
                         continue;
                     }
 
@@ -104,7 +104,7 @@ final readonly class JsonLdDocuments
     {
         $terms = array_values(array_filter(
             array_keys($context),
-            static fn(string $key): bool => !str_starts_with($key, '@') && !in_array($key, ['vocab', 'language'], true),
+            static fn(string $key): bool => !str_starts_with($key, '@') && !in_array($key, ['vocab', 'language'], strict: true),
         ));
 
         $id = Gen::frequency([
@@ -127,17 +127,14 @@ final readonly class JsonLdDocuments
                     self::propertyValue($context),
                 ),
             ]),
-            static function (array $n) use ($context): array {
+            static function (array $n): array {
                 $node = [];
-
                 if ($n['id'] !== null) {
                     $node['@id'] = $n['id'];
                 }
-
                 if ($n['type'] !== null) {
                     $node['@type'] = $n['type'];
                 }
-
                 foreach ($n['props'] as $key => $value) {
                     if ($key === 'id' || $key === 'type') {
                         continue;
@@ -191,7 +188,7 @@ final readonly class JsonLdDocuments
      */
     private static function scalar(array $coercions): ArbitraryInterface
     {
-        $hasIriCoercion = in_array('@id', $coercions, true) || in_array('@vocab', $coercions, true);
+        $hasIriCoercion = in_array('@id', $coercions, strict: true) || in_array('@vocab', $coercions, strict: true);
 
         if ($hasIriCoercion) {
             return Gen::stringFrom('value0123 ', minLength: 0, maxLength: 12);

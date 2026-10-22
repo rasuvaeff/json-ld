@@ -9,10 +9,11 @@ namespace Rasuvaeff\JsonLd\Rdf;
  *
  * @api
  */
-final readonly class Iri
+final readonly class Iri implements \Stringable
 {
     public function __construct(public string $value) {}
 
+    #[\Override]
     public function __toString(): string
     {
         return $this->value;

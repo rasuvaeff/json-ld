@@ -14,7 +14,7 @@ namespace Rasuvaeff\JsonLd;
  *
  * @api
  */
-final readonly class Iri
+final readonly class Iri implements \Stringable
 {
     /**
      * IRI reference grammar for scheme, authority and path, RFC 3986
@@ -118,6 +118,7 @@ final readonly class Iri
         );
     }
 
+    #[\Override]
     public function __toString(): string
     {
         $result = '';
@@ -170,7 +171,7 @@ final readonly class Iri
     public function resolve(self $reference): self
     {
         if ($reference->scheme !== null) {
-            return $reference->withPath(self::removeDotSegments($reference->path));
+            return $reference->withPath($this->removeDotSegments($reference->path));
         }
 
         if ($reference->host !== null) {
@@ -179,7 +180,7 @@ final readonly class Iri
                 userInfo: $reference->userInfo,
                 host: $reference->host,
                 port: $reference->port,
-                path: self::removeDotSegments($reference->path),
+                path: $this->removeDotSegments($reference->path),
                 query: $reference->query,
                 fragment: $reference->fragment,
             );
@@ -206,7 +207,7 @@ final readonly class Iri
             userInfo: $this->userInfo,
             host: $this->host,
             port: $this->port,
-            path: self::removeDotSegments($path),
+            path: $this->removeDotSegments($path),
             query: $reference->query,
             fragment: $reference->fragment,
         );
@@ -233,7 +234,7 @@ final readonly class Iri
     /**
      * RFC 3986 section 5.2.4.
      */
-    private static function removeDotSegments(string $input): string
+    private function removeDotSegments(string $input): string
     {
         $output = '';
 
@@ -248,10 +249,10 @@ final readonly class Iri
                 $input = '/';
             } elseif (str_starts_with($input, '/../')) {
                 $input = '/' . substr($input, 4);
-                $output = self::removeLastSegment($output);
+                $output = $this->removeLastSegment($output);
             } elseif ($input === '/..') {
                 $input = '/';
-                $output = self::removeLastSegment($output);
+                $output = $this->removeLastSegment($output);
             } elseif ($input === '.' || $input === '..') {
                 $input = '';
             } elseif (str_starts_with($input, '/')) {
@@ -268,7 +269,7 @@ final readonly class Iri
         return $output;
     }
 
-    private static function removeLastSegment(string $output): string
+    private function removeLastSegment(string $output): string
     {
         $slash = strrpos($output, '/');
 

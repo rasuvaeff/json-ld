@@ -23,7 +23,7 @@ use Rasuvaeff\JsonLd\Keywords;
  * @psalm-type NodeShape = array{id: string, types: list<string>, props: array<string, list<ArrayObject<string, mixed>>>}
  * @psalm-type Usage = array{subject: string, property: string, slot: ArrayObject<string, mixed>}
  */
-final class FromRdf
+final readonly class FromRdf
 {
     private const string XSD_BOOLEAN = 'http://www.w3.org/2001/XMLSchema#boolean';
 
@@ -43,9 +43,9 @@ final class FromRdf
      * @param string|null $rdfDirection `i18n-datatype`, `compound-literal` or null
      */
     public function __construct(
-        private readonly bool $useNativeTypes = false,
-        private readonly bool $useRdfType = false,
-        private readonly ?string $rdfDirection = null,
+        private bool $useNativeTypes = false,
+        private bool $useRdfType = false,
+        private ?string $rdfDirection = null,
     ) {}
 
     /**
@@ -63,22 +63,22 @@ final class FromRdf
         $compoundSubjects = [];
 
         foreach ($dataset->quads as $quad) {
-            $name = $quad->graph === null ? Keywords::DEFAULT_GRAPH : self::id($quad->graph);
+            $name = $quad->graph === null ? Keywords::DEFAULT_GRAPH : $this->id($quad->graph);
 
             $graphMap[$name] ??= [];
 
             if ($name !== Keywords::DEFAULT_GRAPH) {
-                $graphMap[Keywords::DEFAULT_GRAPH][$name] ??= self::emptyNode($name);
+                $graphMap[Keywords::DEFAULT_GRAPH][$name] ??= $this->emptyNode($name);
             }
 
-            $subject = self::id($quad->subject);
-            $graphMap[$name][$subject] ??= self::emptyNode($subject);
+            $subject = $this->id($quad->subject);
+            $graphMap[$name][$subject] ??= $this->emptyNode($subject);
 
             $object = $quad->object;
 
             if (!$object instanceof Literal) {
-                $objectId = self::id($object);
-                $graphMap[$name][$objectId] ??= self::emptyNode($objectId);
+                $objectId = $this->id($object);
+                $graphMap[$name][$objectId] ??= $this->emptyNode($objectId);
             }
 
             $property = $quad->predicate->value;
@@ -88,9 +88,9 @@ final class FromRdf
             }
 
             if ($property === Literal::RDF_TYPE && !$this->useRdfType && !$object instanceof Literal) {
-                $objectId = self::id($object);
+                $objectId = $this->id($object);
 
-                if (!in_array($objectId, $graphMap[$name][$subject]['types'], true)) {
+                if (!in_array($objectId, $graphMap[$name][$subject]['types'], strict: true)) {
                     $graphMap[$name][$subject]['types'][] = $objectId;
                 }
 
@@ -117,7 +117,7 @@ final class FromRdf
             $graphMap[$name][$subject]['props'][$property] = $values;
 
             if (!$object instanceof Literal) {
-                $objectId = self::id($object);
+                $objectId = $this->id($object);
 
                 if ($isNew && (Syntax::isBlankNodeId($objectId) || $objectId === Literal::RDF_NIL)) {
                     $usages[$name][$objectId][] = ['subject' => $subject, 'property' => $property, 'slot' => $value];
@@ -151,8 +151,8 @@ final class FromRdf
             $entries = [];
 
             foreach ($graph as $node) {
-                if (!self::isBare($node)) {
-                    $entries[] = self::render($node);
+                if (!$this->isBare($node)) {
+                    $entries[] = $this->render($node);
                 }
             }
 
@@ -163,7 +163,7 @@ final class FromRdf
         $result = [];
 
         foreach ($default as $id => $node) {
-            $rendered = self::render($node);
+            $rendered = $this->render($node);
 
             if (isset($named[$id])) {
                 $rendered[Keywords::GRAPH] = $named[$id];
@@ -174,7 +174,7 @@ final class FromRdf
             }
         }
 
-        return self::finish($result);
+        return $this->finish($result);
     }
 
     /**
@@ -183,7 +183,7 @@ final class FromRdf
      *
      * @return list<mixed>
      */
-    private static function finish(mixed $value): array
+    private function finish(mixed $value): array
     {
         /** @var list<mixed> */
         return self::unwrap($value);
@@ -201,7 +201,7 @@ final class FromRdf
     /**
      * @return NodeShape
      */
-    private static function emptyNode(string $id): array
+    private function emptyNode(string $id): array
     {
         return ['id' => $id, 'types' => [], 'props' => []];
     }
@@ -209,7 +209,7 @@ final class FromRdf
     /**
      * @param NodeShape $node
      */
-    private static function isBare(array $node): bool
+    private function isBare(array $node): bool
     {
         return $node['types'] === [] && $node['props'] === [];
     }
@@ -219,7 +219,7 @@ final class FromRdf
      *
      * @return array<string, mixed>
      */
-    private static function render(array $node): array
+    private function render(array $node): array
     {
         $result = [Keywords::ID => $node['id']];
 
@@ -255,7 +255,7 @@ final class FromRdf
             while ($property === Literal::RDF_REST
                 && Syntax::isBlankNodeId($node)
                 && isset($graph[$node], $usages[$node][0])
-                && self::isWellFormedListNode($graph[$node], count($usages[$node]), $usageTotals[$node] ?? 0)
+                && $this->isWellFormedListNode($graph[$node], count($usages[$node]), $usageTotals[$node] ?? 0)
             ) {
                 array_unshift($list, $graph[$node]['props'][Literal::RDF_FIRST][0]);
                 array_unshift($listNodes, $node);
@@ -277,7 +277,7 @@ final class FromRdf
     /**
      * @param NodeShape $node
      */
-    private static function isWellFormedListNode(array $node, int $usages, int $total): bool
+    private function isWellFormedListNode(array $node, int $usages, int $total): bool
     {
         if ($usages !== 1 || $total !== 1) {
             return false;
@@ -340,7 +340,7 @@ final class FromRdf
     private function objectToValue(Iri|BlankNode|Literal $term): array
     {
         if (!$term instanceof Literal) {
-            return [Keywords::ID => self::id($term)];
+            return [Keywords::ID => $this->id($term)];
         }
 
         $datatype = $term->datatype ?? Literal::XSD_STRING;
@@ -353,12 +353,12 @@ final class FromRdf
             if ($datatype === Literal::XSD_STRING) {
                 $converted = $lexical;
             } elseif ($datatype === self::XSD_BOOLEAN) {
-                if (in_array($lexical, ['true', 'false', '1', '0'], true)) {
+                if (in_array($lexical, ['true', 'false', '1', '0'], strict: true)) {
                     $converted = $lexical === 'true' || $lexical === '1';
                 } else {
                     $type = $datatype;
                 }
-            } elseif ($datatype === self::XSD_INTEGER && self::fitsInteger($lexical)) {
+            } elseif ($datatype === self::XSD_INTEGER && $this->fitsInteger($lexical)) {
                 $converted = (int) $lexical;
             } elseif ($datatype === self::XSD_DOUBLE
                 && preg_match('~^[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?\z~', $lexical) === 1
@@ -373,7 +373,7 @@ final class FromRdf
         } elseif ($datatype === Literal::RDF_JSON) {
             try {
                 /** @var JsonValue $converted */
-                $converted = json_decode($lexical, true, 512, JSON_THROW_ON_ERROR);
+                $converted = json_decode($lexical, associative: true, depth: 512, flags: JSON_THROW_ON_ERROR);
             } catch (JsonException) {
                 throw new InvalidInputException('invalid JSON literal');
             }
@@ -399,7 +399,7 @@ final class FromRdf
         if ($this->useNativeTypes && $datatype === Literal::RDF_JSON) {
             try {
                 /** @var JsonValue $converted */
-                $converted = json_decode($lexical, true, 512, JSON_THROW_ON_ERROR);
+                $converted = json_decode($lexical, associative: true, depth: 512, flags: JSON_THROW_ON_ERROR);
             } catch (JsonException) {
                 throw new InvalidInputException('invalid JSON literal');
             }
@@ -416,7 +416,7 @@ final class FromRdf
         return $result;
     }
 
-    private static function fitsInteger(string $lexical): bool
+    private function fitsInteger(string $lexical): bool
     {
         if (preg_match('~^([+-]?)0*([0-9]+)\z~', $lexical, $match) !== 1) {
             return false;
@@ -427,7 +427,7 @@ final class FromRdf
         return (string) (int) $normalized === $normalized;
     }
 
-    private static function id(Iri|BlankNode $term): string
+    private function id(Iri|BlankNode $term): string
     {
         return $term instanceof BlankNode ? '_:' . $term->id : $term->value;
     }

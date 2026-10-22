@@ -34,7 +34,7 @@ final readonly class InlineContextLoader implements ContextLoaderInterface
         try {
             return new LoadedContext(documentUrl: '', document: Json::decode($reference));
         } catch (InvalidJsonException $exception) {
-            throw new DocumentLoadingException($exception->getMessage(), previous: $exception);
+            throw new DocumentLoadingException($exception->getMessage(), $exception->getCode(), previous: $exception);
         }
     }
 }

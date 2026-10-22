@@ -149,7 +149,7 @@ final class NQuads
     private function matchTerm(string $line, int $offset): ?array
     {
         if (preg_match('~\G' . self::IRIREF . '~u', $line, $match, 0, $offset) === 1) {
-            return [new Iri(self::unescape($match[1])), $offset + strlen($match[0])];
+            return [new Iri($this->unescape($match[1])), $offset + strlen($match[0])];
         }
 
         if (preg_match('~\G' . self::BLANK . '~u', $line, $match, 0, $offset) === 1) {
@@ -157,12 +157,12 @@ final class NQuads
         }
 
         if (preg_match('~\G' . self::LITERAL . '~u', $line, $match, 0, $offset) === 1) {
-            $value = self::unescape($match[1]);
+            $value = $this->unescape($match[1]);
 
             if (isset($match[3]) && $match[3] !== '') {
                 $literal = Literal::langString($value, $match[3]);
             } elseif (isset($match[2]) && $match[2] !== '') {
-                $literal = Literal::typed($value, self::unescape($match[2]));
+                $literal = Literal::typed($value, $this->unescape($match[2]));
             } else {
                 $literal = Literal::string($value);
             }
@@ -199,7 +199,7 @@ final class NQuads
         ) ?? $value;
     }
 
-    private static function unescape(string $value): string
+    private function unescape(string $value): string
     {
         return preg_replace_callback(
             '~\\\\(u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8}|[tbnrf"\'\\\\])~',

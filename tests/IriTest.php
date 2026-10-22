@@ -154,8 +154,8 @@ final class IriTest
         $resolved = Iri::of($base)->resolve(Iri::of($reference));
         $segments = array_filter(explode('/', $resolved->path), static fn(string $s): bool => $s !== '');
 
-        Assert::false(in_array('.', $segments, true));
-        Assert::false(in_array('..', $segments, true));
+        Assert::false(in_array('.', $segments, strict: true));
+        Assert::false(in_array('..', $segments, strict: true));
     }
 
     /** @return array<string, \Rasuvaeff\PropertyTesting\ArbitraryInterface> */

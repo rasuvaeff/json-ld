@@ -75,7 +75,7 @@ final class Keywords
 
     public static function isKeyword(mixed $value): bool
     {
-        return is_string($value) && in_array($value, self::all(), true);
+        return is_string($value) && in_array($value, self::all(), strict: true);
     }
 
     /** @return list<string> */

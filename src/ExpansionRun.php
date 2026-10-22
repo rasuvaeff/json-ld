@@ -71,7 +71,7 @@ final class ExpansionRun
         }
 
         $definition = $activeProperty !== null ? $context->term($activeProperty) : null;
-        $propertyScoped = $definition !== null && $definition->hasContext;
+        $propertyScoped = $definition instanceof \Rasuvaeff\JsonLd\Context\TermDefinition && $definition->hasContext;
 
         if (!is_array($element)) {
             if ($activeProperty === null || $activeProperty === Keywords::GRAPH) {
@@ -92,7 +92,7 @@ final class ExpansionRun
 
         if (array_is_list($element)) {
             $result = [];
-            $listContainer = $definition !== null && in_array(Keywords::LIST, $definition->container, true);
+            $listContainer = $definition instanceof \Rasuvaeff\JsonLd\Context\TermDefinition && in_array(Keywords::LIST, $definition->container, strict: true);
 
             /** @var JsonValue $item */
             foreach ($element as $item) {
@@ -130,7 +130,7 @@ final class ExpansionRun
         ?TermDefinition $propertyDefinition,
         bool $fromMap,
     ): mixed {
-        if ($context->previous !== null && !$fromMap) {
+        if ($context->previous instanceof \Rasuvaeff\JsonLd\Context\ActiveContext && !$fromMap) {
             $hasValue = false;
 
             foreach (array_keys($element) as $key) {
@@ -146,7 +146,7 @@ final class ExpansionRun
             }
         }
 
-        if ($propertyDefinition !== null && $propertyDefinition->hasContext) {
+        if ($propertyDefinition instanceof \Rasuvaeff\JsonLd\Context\TermDefinition && $propertyDefinition->hasContext) {
             $context = $this->processor->process(
                 $context,
                 $propertyDefinition->context,
@@ -175,7 +175,7 @@ final class ExpansionRun
             foreach ($terms as $term) {
                 $definition = $typeScoped->term($term);
 
-                if ($definition !== null && $definition->hasContext) {
+                if ($definition instanceof \Rasuvaeff\JsonLd\Context\TermDefinition && $definition->hasContext) {
                     $context = $this->processor->process(
                         $context,
                         $definition->context,
@@ -207,7 +207,7 @@ final class ExpansionRun
 
         if (array_key_exists(Keywords::VALUE, $result)) {
             foreach (array_keys($result) as $key) {
-                if (!in_array($key, [Keywords::DIRECTION, Keywords::INDEX, Keywords::LANGUAGE, Keywords::TYPE, Keywords::VALUE], true)) {
+                if (!in_array($key, [Keywords::DIRECTION, Keywords::INDEX, Keywords::LANGUAGE, Keywords::TYPE, Keywords::VALUE], strict: true)) {
                     throw new InvalidInputException('invalid value object');
                 }
             }
@@ -238,7 +238,7 @@ final class ExpansionRun
             }
         } elseif (array_key_exists(Keywords::SET, $result) || array_key_exists(Keywords::LIST, $result)) {
             foreach (array_keys($result) as $key) {
-                if (!in_array($key, [Keywords::SET, Keywords::LIST, Keywords::INDEX], true)) {
+                if (!in_array($key, [Keywords::SET, Keywords::LIST, Keywords::INDEX], strict: true)) {
                     throw new InvalidInputException('invalid set or list object');
                 }
             }
@@ -324,11 +324,11 @@ final class ExpansionRun
             $definition = $context->term($key);
             $container = $definition->container ?? [];
 
-            if ($definition !== null && $definition->type === Keywords::JSON) {
+            if ($definition instanceof \Rasuvaeff\JsonLd\Context\TermDefinition && $definition->type === Keywords::JSON) {
                 $expandedValue = [Keywords::VALUE => $value, Keywords::TYPE => Keywords::JSON];
-            } elseif (in_array(Keywords::LANGUAGE, $container, true) && self::isMap($value)) {
+            } elseif (in_array(Keywords::LANGUAGE, $container, strict: true) && $this->isMap($value)) {
                 $expandedValue = $this->expandLanguageMap($context, $definition, $value);
-            } elseif (self::isMap($value)
+            } elseif ($this->isMap($value)
                 && array_intersect($container, [Keywords::INDEX, Keywords::TYPE, Keywords::ID]) !== []
             ) {
                 $expandedValue = $this->expandIndexMap($context, $key, $definition, $container, $value);
@@ -341,13 +341,13 @@ final class ExpansionRun
                 continue;
             }
 
-            if (in_array(Keywords::LIST, $container, true) && !self::isListObject($expandedValue)) {
+            if (in_array(Keywords::LIST, $container, strict: true) && !$this->isListObject($expandedValue)) {
                 $expandedValue = [Keywords::LIST => self::asList($expandedValue)];
             }
 
-            if (in_array(Keywords::GRAPH, $container, true)
-                && !in_array(Keywords::ID, $container, true)
-                && !in_array(Keywords::INDEX, $container, true)
+            if (in_array(Keywords::GRAPH, $container, strict: true)
+                && !in_array(Keywords::ID, $container, strict: true)
+                && !in_array(Keywords::INDEX, $container, strict: true)
             ) {
                 $expandedValue = array_map(
                     static fn(mixed $item): array => [Keywords::GRAPH => self::asList($item)],
@@ -355,31 +355,31 @@ final class ExpansionRun
                 );
             }
 
-            if ($definition !== null && $definition->reverse) {
+            if ($definition instanceof \Rasuvaeff\JsonLd\Context\TermDefinition && $definition->reverse) {
                 /** @var array<string, mixed> $reverse */
                 $reverse = $result[Keywords::REVERSE] ?? [];
 
                 /** @var JsonValue $item */
                 foreach (self::asList($expandedValue) as $item) {
-                    if (self::isValueObject($item) || self::isListObject($item)) {
+                    if ($this->isValueObject($item) || $this->isListObject($item)) {
                         throw new InvalidInputException('invalid reverse property value');
                     }
                 }
 
-                self::append($reverse, $expandedProperty, $expandedValue);
+                $this->append($reverse, $expandedProperty, $expandedValue);
                 $result[Keywords::REVERSE] = $reverse;
 
                 continue;
             }
 
-            self::append($result, $expandedProperty, $expandedValue);
+            $this->append($result, $expandedProperty, $expandedValue);
         }
 
         foreach ($nests as $nestKey) {
             $nestContext = $context;
             $nestDefinition = $context->term($nestKey);
 
-            if ($nestDefinition !== null && $nestDefinition->hasContext) {
+            if ($nestDefinition instanceof \Rasuvaeff\JsonLd\Context\TermDefinition && $nestDefinition->hasContext) {
                 $nestContext = $this->processor->process(
                     $context,
                     $nestDefinition->context,
@@ -390,7 +390,7 @@ final class ExpansionRun
 
             /** @var JsonValue $nested */
             foreach (self::asList($element[$nestKey]) as $nested) {
-                if (!self::isMap($nested)) {
+                if (!$this->isMap($nested)) {
                     throw new InvalidInputException('invalid @nest value');
                 }
 
@@ -445,7 +445,7 @@ final class ExpansionRun
                     $types[] = $expanded;
                 }
 
-                if (!is_string($value) && !(is_array($value) && array_is_list($value))) {
+                if (!is_string($value) && (!is_array($value) || !array_is_list($value))) {
                     throw new InvalidInputException('invalid type value');
                 }
 
@@ -464,7 +464,7 @@ final class ExpansionRun
                 $included = self::asList($this->expand($context, Keywords::INCLUDED, $value));
 
                 foreach ($included as $node) {
-                    if (!self::isMap($node) || self::isValueObject($node) || self::isListObject($node)) {
+                    if (!$this->isMap($node) || $this->isValueObject($node) || $this->isListObject($node)) {
                         throw new InvalidInputException('invalid @included value');
                     }
                 }
@@ -531,22 +531,22 @@ final class ExpansionRun
                 return;
 
             case Keywords::REVERSE:
-                if (!self::isMap($value)) {
+                if (!$this->isMap($value)) {
                     throw new InvalidInputException('invalid @reverse value');
                 }
 
                 /** @var JsonValue $expanded */
                 $expanded = $this->expand($context, Keywords::REVERSE, $value);
 
-                if (!self::isMap($expanded) || array_key_exists(self::EMPTY, $expanded)) {
+                if (!$this->isMap($expanded) || array_key_exists(self::EMPTY, $expanded)) {
                     return;
                 }
 
                 /** @var JsonValue $items */
                 foreach ($expanded as $property => $items) {
                     if ($property === Keywords::REVERSE) {
-                        foreach (self::asMap($items) as $reverseProperty => $reverseItems) {
-                            self::append($result, strval($reverseProperty), $reverseItems);
+                        foreach ($this->asMap($items) as $reverseProperty => $reverseItems) {
+                            $this->append($result, strval($reverseProperty), $reverseItems);
                         }
 
                         continue;
@@ -554,14 +554,14 @@ final class ExpansionRun
 
                     /** @var JsonValue $item */
                     foreach (self::asList($items) as $item) {
-                        if (self::isValueObject($item) || self::isListObject($item)) {
+                        if ($this->isValueObject($item) || $this->isListObject($item)) {
                             throw new InvalidInputException('invalid reverse property value');
                         }
                     }
 
                     /** @var array<string, mixed> $reverse */
                     $reverse = $result[Keywords::REVERSE] ?? [];
-                    self::append($reverse, strval($property), $items);
+                    $this->append($reverse, strval($property), $items);
                     $result[Keywords::REVERSE] = $reverse;
                 }
 
@@ -579,7 +579,7 @@ final class ExpansionRun
      */
     private function expandLanguageMap(ActiveContext $context, ?TermDefinition $definition, array $value): array
     {
-        $direction = $definition !== null && $definition->hasDirection ? $definition->direction : $context->direction;
+        $direction = $definition instanceof \Rasuvaeff\JsonLd\Context\TermDefinition && $definition->hasDirection ? $definition->direction : $context->direction;
         $result = [];
 
         /** @var JsonValue $items */
@@ -635,11 +635,11 @@ final class ExpansionRun
             $index = strval($index);
             $mapContext = $context;
 
-            if (in_array(Keywords::TYPE, $container, true)) {
+            if (in_array(Keywords::TYPE, $container, strict: true)) {
                 $mapContext = $context->previous ?? $context;
                 $indexDefinition = $mapContext->term($index);
 
-                if ($indexDefinition !== null && $indexDefinition->hasContext) {
+                if ($indexDefinition instanceof \Rasuvaeff\JsonLd\Context\TermDefinition && $indexDefinition->hasContext) {
                     $mapContext = $this->processor->process(
                         $mapContext,
                         $indexDefinition->context,
@@ -649,11 +649,11 @@ final class ExpansionRun
             }
 
             $expandedIndex = $this->processor->expandIri($mapContext, $index, vocab: true);
-            $items = self::asList($this->expand($mapContext, $key, self::asList($indexValue), true));
+            $items = self::asList($this->expand($mapContext, $key, self::asList($indexValue), fromMap: true));
 
             /** @var JsonValue $item */
             foreach ($items as $item) {
-                if (!self::isMap($item)) {
+                if (!$this->isMap($item)) {
                     $result[] = $item;
 
                     continue;
@@ -661,11 +661,11 @@ final class ExpansionRun
 
                 unset($item[self::EMPTY]);
 
-                if (in_array(Keywords::GRAPH, $container, true) && !self::isGraphObject($item)) {
+                if (in_array(Keywords::GRAPH, $container, strict: true) && !$this->isGraphObject($item)) {
                     $item = [Keywords::GRAPH => [$item]];
                 }
 
-                if (in_array(Keywords::INDEX, $container, true) && $indexKey !== Keywords::INDEX && $expandedIndex !== Keywords::NONE) {
+                if (in_array(Keywords::INDEX, $container, strict: true) && $indexKey !== Keywords::INDEX && $expandedIndex !== Keywords::NONE) {
                     $reexpanded = $this->expandValue($context, $indexKey, $index);
                     $expandedKey = $this->processor->expandIri($context, $indexKey, vocab: true);
 
@@ -673,20 +673,20 @@ final class ExpansionRun
                         $item[$expandedKey] = [$reexpanded, ...self::asList($item[$expandedKey] ?? [])];
                     }
 
-                    if (self::isValueObject($item)) {
+                    if ($this->isValueObject($item)) {
                         throw new InvalidInputException('invalid value object');
                     }
-                } elseif (in_array(Keywords::INDEX, $container, true)
+                } elseif (in_array(Keywords::INDEX, $container, strict: true)
                     && !array_key_exists(Keywords::INDEX, $item)
                     && $expandedIndex !== Keywords::NONE
                 ) {
                     $item[Keywords::INDEX] = $index;
-                } elseif (in_array(Keywords::ID, $container, true)
+                } elseif (in_array(Keywords::ID, $container, strict: true)
                     && !array_key_exists(Keywords::ID, $item)
                     && $expandedIndex !== Keywords::NONE
                 ) {
                     $item[Keywords::ID] = $this->processor->expandIri($mapContext, $index, documentRelative: true);
-                } elseif (in_array(Keywords::TYPE, $container, true) && $expandedIndex !== Keywords::NONE) {
+                } elseif (in_array(Keywords::TYPE, $container, strict: true) && $expandedIndex !== Keywords::NONE) {
                     $item[Keywords::TYPE] = [$expandedIndex, ...self::asList($item[Keywords::TYPE] ?? [])];
                 }
 
@@ -717,11 +717,11 @@ final class ExpansionRun
 
         $result = [Keywords::VALUE => $value];
 
-        if ($type !== null && !in_array($type, [Keywords::ID, Keywords::VOCAB, Keywords::NONE], true)) {
+        if ($type !== null && !in_array($type, [Keywords::ID, Keywords::VOCAB, Keywords::NONE], strict: true)) {
             $result[Keywords::TYPE] = $type;
         } elseif (is_string($value)) {
-            $language = $definition !== null && $definition->hasLanguage ? $definition->language : $context->language;
-            $direction = $definition !== null && $definition->hasDirection ? $definition->direction : $context->direction;
+            $language = $definition instanceof \Rasuvaeff\JsonLd\Context\TermDefinition && $definition->hasLanguage ? $definition->language : $context->language;
+            $direction = $definition instanceof \Rasuvaeff\JsonLd\Context\TermDefinition && $definition->hasDirection ? $definition->direction : $context->direction;
 
             if ($language !== null) {
                 $result[Keywords::LANGUAGE] = $language;
@@ -761,7 +761,7 @@ final class ExpansionRun
      * @param array<string, mixed> $map
      * @param JsonValue $value
      */
-    private static function append(array &$map, string $property, mixed $value): void
+    private function append(array &$map, string $property, mixed $value): void
     {
         /** @var list<JsonValue> $values */
         $values = $map[$property] ?? [];
@@ -776,7 +776,7 @@ final class ExpansionRun
     /**
      * @return array<array-key, JsonValue>
      */
-    private static function asMap(mixed $value): array
+    private function asMap(mixed $value): array
     {
         /** @var array<array-key, JsonValue> $map */
         $map = is_array($value) ? $value : [];
@@ -787,24 +787,24 @@ final class ExpansionRun
     /**
      * @psalm-assert-if-true array<string, mixed> $value
      */
-    private static function isMap(mixed $value): bool
+    private function isMap(mixed $value): bool
     {
         return is_array($value) && !array_is_list($value);
     }
 
-    private static function isValueObject(mixed $value): bool
+    private function isValueObject(mixed $value): bool
     {
-        return self::isMap($value) && array_key_exists(Keywords::VALUE, $value);
+        return $this->isMap($value) && array_key_exists(Keywords::VALUE, $value);
     }
 
-    private static function isListObject(mixed $value): bool
+    private function isListObject(mixed $value): bool
     {
-        return self::isMap($value) && array_key_exists(Keywords::LIST, $value);
+        return $this->isMap($value) && array_key_exists(Keywords::LIST, $value);
     }
 
-    private static function isGraphObject(mixed $value): bool
+    private function isGraphObject(mixed $value): bool
     {
-        return self::isMap($value)
+        return $this->isMap($value)
             && array_key_exists(Keywords::GRAPH, $value)
             && array_diff(array_keys($value), [Keywords::GRAPH, Keywords::ID, Keywords::INDEX]) === [];
     }
