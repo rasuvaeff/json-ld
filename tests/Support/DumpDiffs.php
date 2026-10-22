@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 require __DIR__ . '/../../vendor/autoload.php';
 
-use Rasuvaeff\JsonLd\ExpandOptions;
 use Rasuvaeff\JsonLd\Exception\JsonLdException;
+use Rasuvaeff\JsonLd\ExpandOptions;
 use Rasuvaeff\JsonLd\JsonLd;
 use Rasuvaeff\JsonLd\Tests\Support\FixtureContextLoader;
 use Rasuvaeff\JsonLd\Tests\Support\W3cManifest;
@@ -88,4 +88,3 @@ foreach ((new W3cManifest())->cases($suite) as $name => $case) {
         echo "   + {$line}\n";
     }
 }
-

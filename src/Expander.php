@@ -219,7 +219,7 @@ final class Expander
             $others = array_keys($element);
 
             $allowed = array_map(
-                static fn (string $key): ?string => Keywords::isKeyword($key)
+                static fn(string $key): ?string => Keywords::isKeyword($key)
                     ? $key
                     : $context->keywordFor($key),
                 $others,
