@@ -22,7 +22,10 @@ final class FromRdf
 
     private const string XSD_DOUBLE = 'http://www.w3.org/2001/XMLSchema#double';
 
-    public function __construct(private readonly bool $useNativeTypes = false) {}
+    public function __construct(
+        private readonly bool $useNativeTypes = false,
+        private readonly bool $useRdfType = false,
+    ) {}
 
     /**
      * @return list<mixed> expanded JSON-LD document
@@ -55,21 +58,104 @@ final class FromRdf
     }
 
     /**
+     * Walks an rdf:first/rdf:rest chain from its head cell.
+     *
+     * @param array<string, array{first: mixed, rest: ?string}> $cells every list cell keyed by subject
+     *
+     * @return list<mixed>
+     */
+    private function buildList(string $head, array $cells): ?array
+    {
+        $items = [];
+        $current = $head;
+        $visited = [];
+
+        while ($current !== Literal::RDF_NIL) {
+            if (isset($visited[$current])) {
+                // A cycle: this is not a well-formed list.
+                return null;
+            }
+
+            $visited[$current] = true;
+
+            $entry = $cells[$current] ?? null;
+
+            if ($entry === null) {
+                return null;
+            }
+
+            $items[] = $entry['first'];
+            $current = $entry['rest'];
+        }
+
+        return $items;
+    }
+
+    /**
      * @param list<Quad> $quads
      *
      * @return list<array<string, mixed>>
      */
     private function graphNodes(array $quads): array
     {
-        $listHeads = $this->listHeads($quads);
+        $cells = $this->listCells($quads);
+
+        /** @var array<string, true> $restTargets */
+        $restTargets = [];
+
+        foreach ($quads as $quad) {
+            if ($quad->predicate->value === Literal::RDF_REST) {
+                $restTargets[self::termKey($quad->object)] = true;
+            }
+        }
+
+        // Well-formed lists: every cell of a valid chain is consumed by it.
+        $heads = [];
+        $consumed = [];
+
+        foreach ($cells as $subjectKey => $cell) {
+            if (isset($restTargets[$subjectKey])) {
+                continue;
+            }
+
+            $list = $this->buildList($subjectKey, $cells);
+
+            if ($list !== null) {
+                $heads[$subjectKey] = $list;
+
+                $current = $subjectKey;
+
+                while ($current !== Literal::RDF_NIL && isset($cells[$current])) {
+                    $consumed[$current] = true;
+                    $current = $cells[$current]['rest'];
+                }
+            }
+        }
+
+        /** @var array<string, true> $firstRefs subjects referenced through rdf:first */
+        $firstRefs = [];
+
+        foreach ($quads as $quad) {
+            if ($quad->predicate->value === Literal::RDF_FIRST) {
+                $firstRefs[self::termKey($quad->object)] = true;
+            }
+        }
 
         /** @var array<string, array<string, list<array<string, mixed>>>> $bySubject */
         $bySubject = [];
 
         foreach ($quads as $quad) {
             $subjectKey = self::termKey($quad->subject);
+            $predicate = $quad->predicate->value;
 
-            foreach ($this->predicateValues($quad, $quads, $listHeads) as $predicate => $value) {
+            if (($predicate === Literal::RDF_FIRST || $predicate === Literal::RDF_REST)
+                && isset($consumed[$subjectKey])
+                && !isset($firstRefs[$subjectKey])
+            ) {
+                continue;
+            }
+
+            foreach ($this->predicateValues($quad, $cells, $restTargets, $heads) as $predicate => $value) {
                 $bySubject[$subjectKey][$predicate][] = $value;
             }
         }
@@ -94,9 +180,12 @@ final class FromRdf
     }
 
     /**
+     * @param array<string, array{first: mixed, rest: ?string}> $cells
+     * @param array<string, true> $restTargets
+     *
      * @return array<string, mixed> property => value entry
      */
-    private function predicateValues(Quad $quad, array $quads, array $listHeads): array
+    private function predicateValues(Quad $quad, array $cells, array $restTargets, array $heads): array
     {
         $predicate = $quad->predicate->value;
 
@@ -104,6 +193,10 @@ final class FromRdf
             $object = $quad->object;
 
             if ($object instanceof Iri) {
+                if ($this->useRdfType) {
+                    return [$predicate => [Keywords::ID => $object->value]];
+                }
+
                 return [Keywords::TYPE => $object->value];
             }
 
@@ -116,46 +209,22 @@ final class FromRdf
 
         $objectKey = self::termKey($quad->object);
 
-        if (isset($listHeads[$objectKey])) {
-            return [$predicate => [Keywords::LIST => $this->buildList($objectKey, $listHeads)]];
+        if (isset($heads[$objectKey])) {
+            return [$predicate => [Keywords::LIST => $heads[$objectKey]]];
         }
 
         return [$predicate => $this->objectValue($quad->object)];
     }
 
     /**
-     * @param array<string, array{first: mixed, rest: ?string}> $listHeads
-     *
-     * @return list<mixed>
-     */
-    private function buildList(string $head, array $listHeads): array
-    {
-        $items = [];
-        $current = $head;
-
-        while ($current !== Literal::RDF_NIL) {
-            $entry = $listHeads[$current] ?? null;
-
-            if ($entry === null) {
-                break;
-            }
-
-            $items[] = $entry['first'];
-            $current = $entry['rest'];
-        }
-
-        return $items;
-    }
-
-    /**
-     * Finds rdf:first/rdf:rest chains and returns them keyed by head
-     * subject, with the first/rest values already converted.
+     * Every rdf:first/rdf:rest cell keyed by subject, with the first/rest
+     * values already converted.
      *
      * @param list<Quad> $quads
      *
      * @return array<string, array{first: mixed, rest: ?string}>
      */
-    private function listHeads(array $quads): array
+    private function listCells(array $quads): array
     {
         /** @var array<string, array<string, Quad>> $chains */
         $chains = [];
@@ -166,15 +235,7 @@ final class FromRdf
             }
         }
 
-        $restTargets = [];
-
-        foreach ($chains as $chain) {
-            if (isset($chain[Literal::RDF_REST])) {
-                $restTargets[self::termKey($chain[Literal::RDF_REST]->object)] = true;
-            }
-        }
-
-        $heads = [];
+        $cells = [];
 
         foreach ($chains as $subjectKey => $chain) {
             $first = $chain[Literal::RDF_FIRST] ?? null;
@@ -184,18 +245,13 @@ final class FromRdf
                 continue;
             }
 
-            $heads[$subjectKey] = [
+            $cells[$subjectKey] = [
                 'first' => $this->objectValue($first->object),
                 'rest' => self::termKey($rest->object),
             ];
         }
 
-        // A head is a list start only when nothing points at it with rdf:rest.
-        return array_filter(
-            $heads,
-            static fn(string $subjectKey): bool => !isset($restTargets[$subjectKey]),
-            ARRAY_FILTER_USE_KEY,
-        );
+        return $cells;
     }
 
     /**

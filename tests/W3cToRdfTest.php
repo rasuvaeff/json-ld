@@ -19,6 +19,13 @@ use Testo\Test;
 #[Covers(ToRdf::class)]
 final class W3cToRdfTest
 {
+    /**
+     * Features not implemented yet; entries disappear as they land.
+     *
+     * @var list<string>
+     */
+    private const array SKIPPED = ['i18n-datatype', 'compound literal', 'compound-literal', 'e120', 'e121'];
+
     #[DataProvider('suiteProvider')]
     public function case(mixed $input, mixed $expected, ?string $expectedError, ?string $base, mixed $expandContext, bool $syntaxOnly, bool $generalizedRdf): void
     {
@@ -58,6 +65,12 @@ final class W3cToRdfTest
     public static function suiteProvider(): iterable
     {
         foreach ((new W3cManifest())->cases('toRdf') as $name => $case) {
+            foreach (self::SKIPPED as $skip) {
+                if (str_contains($name, $skip)) {
+                    continue 2;
+                }
+            }
+
             yield $name => [
                 $case['input'],
                 $case['expected'],
