@@ -38,6 +38,11 @@ final readonly class TermDefinition
         public ?string $type = null,
         public ?string $nest = null,
         public mixed $localContext = null,
+        /**
+         * Where the scoped context came from: its relative references
+         * resolve against this location, not against `@base`.
+         */
+        public ?string $contextBaseUrl = null,
     ) {}
 
     public function mapsNothing(): bool

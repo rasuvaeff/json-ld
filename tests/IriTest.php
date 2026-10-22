@@ -195,15 +195,15 @@ final class IriTest
     private static function absoluteIri(): \Rasuvaeff\PropertyTesting\ArbitraryInterface
     {
         $host = Gen::map(
-            static fn(array $parts): string => implode('.', $parts),
             Gen::nonEmptyArrayOf(Gen::stringFrom('abcdefghij', minLength: 1, maxLength: 8), maxSize: 3),
+            static fn(array $parts): string => implode('.', $parts),
         );
 
         $segment = Gen::stringFrom('abcdefghij0123456789;=,', minLength: 0, maxLength: 6);
 
         $path = Gen::map(
-            static fn(array $parts): string => '/' . implode('/', $parts),
             Gen::arrayOf($segment, minSize: 0, maxSize: 3),
+            static fn(array $parts): string => '/' . implode('/', $parts),
         );
 
         $query = Gen::nullable(Gen::stringFrom('abc012=&', minLength: 0, maxLength: 6));
@@ -211,12 +211,12 @@ final class IriTest
         $fragment = Gen::nullable(Gen::stringFrom('abc012', minLength: 0, maxLength: 4));
 
         return Gen::flatMap(
+            Gen::record(['host' => $host, 'path' => $path, 'query' => $query, 'fragment' => $fragment]),
             static fn(array $parts): \Rasuvaeff\PropertyTesting\ArbitraryInterface => Gen::constant(
                 'http://' . $parts['host'] . $parts['path']
                 . ($parts['query'] !== null ? '?' . $parts['query'] : '')
                 . ($parts['fragment'] !== null ? '#' . $parts['fragment'] : ''),
             ),
-            Gen::record(['host' => $host, 'path' => $path, 'query' => $query, 'fragment' => $fragment]),
         );
     }
 }

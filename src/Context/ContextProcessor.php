@@ -122,8 +122,10 @@ final class ContextProcessor
             return $this->process($activeContext, $this->extractContext($loaded->document), $options);
         }
 
-        $resolved = $options->base !== null
-            ? (string) $options->base->resolve(Iri::of($reference))
+        $referenceBase = $options->referenceBase();
+
+        $resolved = $referenceBase !== null
+            ? (string) $referenceBase->resolve(Iri::of($reference))
             : $reference;
 
         if (in_array($resolved, $options->remoteContexts, true)) {
@@ -134,7 +136,7 @@ final class ContextProcessor
         $loaded = $this->load($resolved, $options);
 
         $documentUrl = $loaded->documentUrl !== '' ? $loaded->documentUrl : $resolved;
-        $options = $options->withBase(Iri::of($documentUrl));
+        $options = $options->withRefBase(Iri::of($documentUrl));
 
         if ($loaded->contextUrl !== null) {
             $activeContext = $this->process($activeContext, $loaded->contextUrl, $options);
@@ -627,6 +629,7 @@ final class ContextProcessor
                 type: $type,
                 nest: $nest,
                 localContext: $scopedContext,
+                contextBaseUrl: $options->refBase?->__toString(),
             ),
         );
 

@@ -216,7 +216,12 @@ final class Expander
                     $context = $this->processor->process(
                         $context,
                         $typeTerm->localContext,
-                        new ProcessOptions(loader: $state->loader, base: $context->base, propagate: false),
+                        new ProcessOptions(
+                            loader: $state->loader,
+                            base: $context->base,
+                            propagate: false,
+                            refBase: $typeTerm->contextBaseUrl !== null ? Iri::of($typeTerm->contextBaseUrl) : null,
+                        ),
                     );
                 }
             }
@@ -636,7 +641,12 @@ final class Expander
             $context = $this->processor->process(
                 $context,
                 $termDefinition->localContext,
-                new ProcessOptions(loader: $state->loader, base: $context->base, scoped: true),
+                new ProcessOptions(
+                    loader: $state->loader,
+                    base: $context->base,
+                    scoped: true,
+                    refBase: $termDefinition->contextBaseUrl !== null ? Iri::of($termDefinition->contextBaseUrl) : null,
+                ),
             );
 
             $termDefinition = $this->lookupTerm($context, (string) $key);

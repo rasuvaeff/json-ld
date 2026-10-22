@@ -25,7 +25,22 @@ final readonly class ProcessOptions
         public array $remoteContexts = [],
         public int $depth = 0,
         public bool $scoped = false,
+        public ?Iri $refBase = null,
     ) {}
+
+    /**
+     * Context references resolve against where they came from, never
+     * against an `@base` member.
+     */
+    public function referenceBase(): ?Iri
+    {
+        return $this->refBase ?? $this->base;
+    }
+
+    public function withRefBase(?Iri $refBase): self
+    {
+        return new self($this->loader, $this->base, $this->overrideProtected, $this->propagate, $this->remoteContexts, $this->depth, $this->scoped, $refBase);
+    }
 
     public function withBase(?Iri $base): self
     {
