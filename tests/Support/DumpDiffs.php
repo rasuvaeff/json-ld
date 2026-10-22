@@ -23,9 +23,11 @@ foreach ((new W3cManifest())->cases($suite) as $name => $case) {
 
     $opts = new ExpandOptions(base: $case['base'], expandContext: $case['expandContext'], loader: $loader);
 
-    if ($suite === 'expand') {
+    if ($suite === 'expand' || $suite === 'flatten') {
         try {
-            $got = W3cExpandTest::canonical(JsonLd::expand((array) $case['input'], $opts));
+            $got = W3cExpandTest::canonical(
+                $suite === 'flatten' ? JsonLd::flatten((array) $case['input'], $opts) : JsonLd::expand((array) $case['input'], $opts),
+            );
         } catch (Throwable $e) {
             if ($e->getMessage() === $case['expectedError']) {
                 continue;

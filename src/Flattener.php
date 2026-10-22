@@ -142,6 +142,13 @@ final class Flattener
 
             $values = is_array($value) && array_is_list($value) ? $value : [$value];
 
+            if ($values === []) {
+                // An explicitly empty property stays empty.
+                $node[$property] = [];
+
+                continue;
+            }
+
             foreach ($values as $entry) {
                 $this->addPropertyValue($node, $property, $entry, $graphs, $activeGraph, $generator);
             }
@@ -194,6 +201,14 @@ final class Flattener
 
         if (array_key_exists(Keywords::VALUE, $entry)) {
             $this->addUnique($node, $property, $entry, true);
+
+            return;
+        }
+
+        // A bare reference registers nothing: only nodes carrying data
+        // become graph entries.
+        if (isset($entry[Keywords::ID]) && count($entry) === 1) {
+            $this->addUnique($node, $property, [Keywords::ID => $entry[Keywords::ID]], true);
 
             return;
         }
