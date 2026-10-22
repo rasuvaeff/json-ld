@@ -122,6 +122,16 @@ final class ContextBuilder
         $this->terms[$term] = $definition;
     }
 
+    /**
+     * A null definition: the term resolves to nothing, and does not fall
+     * back to the vocabulary mapping.
+     */
+    public function nullifyTerm(string $term): void
+    {
+        $this->removeTerm($term);
+        $this->terms[$term] = null;
+    }
+
     public function removeTerm(string $term): void
     {
         unset($this->terms[$term]);

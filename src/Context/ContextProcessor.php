@@ -88,7 +88,11 @@ final class ContextProcessor
                         throw new InvalidContextException('invalid context nullification');
                     }
 
-                    $item = [];
+                    // null resets the accumulated context.
+                    $context = new ActiveContext(base: $options->base);
+                    $options = $options->withBase($context->base);
+
+                    continue;
                 }
 
                 if (!is_string($item) && !is_array($item)) {
@@ -304,7 +308,9 @@ final class ContextProcessor
                     throw new InvalidContextException('protected term redefinition');
                 }
 
-                $builder->removeTerm($term);
+                // A nulled term keeps blocking resolution; it does not fall
+                // back to @vocab.
+                $builder->nullifyTerm($term);
 
                 continue;
             }

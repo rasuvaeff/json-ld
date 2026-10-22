@@ -119,6 +119,10 @@ final class Expander
             return $this->expandScalar($context, $activeProperty, $termDefinition, $element);
         }
 
+        if ($element === []) {
+            return [];
+        }
+
         return $this->expandNodeObject($context, $activeProperty, $termDefinition, $element, $state);
     }
 
@@ -670,7 +674,7 @@ final class Expander
         $result = [];
 
         foreach ($value as $language => $items) {
-            if ($items === null) {
+            if ($items === null || Keywords::isKeyword((string) $language) || str_starts_with((string) $language, '@')) {
                 continue;
             }
 
@@ -1128,7 +1132,7 @@ final class Expander
 
         $language = $termDefinition->language ?? $context->language;
 
-        if ($language !== null && $language !== Keywords::NONE) {
+        if (is_string($value) && $language !== null && $language !== Keywords::NONE) {
             $result[Keywords::LANGUAGE] = $language;
         }
 
@@ -1210,9 +1214,7 @@ final class Expander
             }
 
             foreach (is_array($value) && array_is_list($value) ? $value : [$value] as $item) {
-                if (!in_array($item, $object[$key], true)) {
-                    $object[$key][] = $item;
-                }
+                $object[$key][] = $item;
             }
 
             return;
@@ -1227,10 +1229,7 @@ final class Expander
         $existing = $object[$key];
 
         if (is_array($existing) && array_is_list($existing)) {
-            if (!in_array($value, $existing, true)) {
-                $existing[] = $value;
-            }
-
+            $existing[] = $value;
             $object[$key] = $existing;
 
             return;
