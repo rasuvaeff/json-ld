@@ -48,8 +48,15 @@ final class IriExpansion
 
         if ($colon !== false) {
             $prefix = substr($value, 0, $colon);
+            $suffix = substr($value, $colon + 1);
 
             if ($prefix === '_') {
+                return $value;
+            }
+
+            // scheme://… is an absolute IRI; a term named like the scheme
+            // never rewrites it.
+            if (str_starts_with($suffix, '//')) {
                 return $value;
             }
 

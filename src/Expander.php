@@ -161,6 +161,11 @@ final class Expander
         $valueKey = $this->aliasKey($context, $element, Keywords::VALUE);
 
         if ($valueKey !== null) {
+            if ($activeProperty === null || $activeProperty === Keywords::GRAPH) {
+                // A free-floating value object carries no meaning.
+                return null;
+            }
+
             return $this->expandValueObject($context, $element, $valueKey);
         }
 
@@ -171,6 +176,52 @@ final class Expander
 
         $hasListMember = $this->aliasKey($context, $element, Keywords::LIST) !== null;
         $hasSetMember = $this->aliasKey($context, $element, Keywords::SET) !== null;
+
+        $setKey = $this->aliasKey($context, $element, Keywords::SET);
+
+        if ($setKey !== null) {
+            // A set object expands to just its contents.
+            $others = array_keys($element);
+
+            $allowed = array_map(
+                static fn (string $key): ?string => Keywords::isKeyword($key)
+                    ? $key
+                    : $context->keywordFor($key),
+                $others,
+            );
+
+            $onlySet = array_reduce(
+                $others,
+                static function (bool $carry, string $key) use ($context): bool {
+                    $keyword = Keywords::isKeyword($key) ? $key : $context->keywordFor($key);
+
+                    return $carry && in_array($keyword, [Keywords::SET, Keywords::INDEX, Keywords::CONTEXT], true);
+                },
+                true,
+            );
+
+            if ($onlySet) {
+                unset($allowed);
+
+                $setExpanded = $this->expandElement(
+                    $context,
+                    $activeProperty,
+                    $termDefinition,
+                    $element[$setKey],
+                    new ExpansionState(loader: $state->loader),
+                );
+
+                if ($setExpanded === null) {
+                    return null;
+                }
+
+                return is_array($setExpanded) && array_is_list($setExpanded)
+                    ? $setExpanded
+                    : [$setExpanded];
+            }
+
+            unset($allowed);
+        }
 
         if ($hasListMember && $hasSetMember) {
             throw new InvalidContextException('invalid set or list object');
@@ -289,7 +340,7 @@ final class Expander
 
                     $expandedType = Keywords::isKeyword($type)
                         ? $type
-                        : IriExpansion::expand($context, $type, vocab: true);
+                        : IriExpansion::expand($context, $type, vocab: true, documentRelative: true);
 
                     if ($expandedType === null || (!IriExpansion::isAbsolute($expandedType) && !str_starts_with($expandedType, '_:'))) {
                         throw new InvalidContextException('invalid type value');
@@ -511,6 +562,8 @@ final class Expander
                             new ExpansionState(loader: $state->loader, insideList: true),
                         ),
                     ];
+                } elseif ($value === []) {
+                    $expandedValue = [];
                 } else {
                     $expandedValue = [];
 
@@ -532,12 +585,22 @@ final class Expander
                         }
                     }
                 }
+            } elseif (in_array(Keywords::LIST, $container, true)) {
+                $expandedValue = [
+                    Keywords::LIST => $this->expandElement(
+                        $context,
+                        $expandedProperty,
+                        $termDefinition,
+                        [$value],
+                        new ExpansionState(loader: $state->loader, insideList: true),
+                    ),
+                ];
             } else {
                 $expandedValue = $this->expandElement($context, $expandedProperty, $termDefinition, $value, $state);
             }
         }
 
-        if ($expandedValue === null || $expandedValue === []) {
+        if ($expandedValue === null) {
             return;
         }
 

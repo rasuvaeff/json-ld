@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Rasuvaeff\JsonLd\Rdf;
 
+use Rasuvaeff\JsonLd\Json;
 use Rasuvaeff\JsonLd\Keywords;
 
 /**
@@ -219,6 +220,12 @@ final class FromRdf
         }
 
         $datatype = $object->datatype ?? Literal::XSD_STRING;
+
+        if ($datatype === Literal::RDF_JSON) {
+            $decoded = Json::decode($object->value);
+
+            return [Keywords::VALUE => $decoded, Keywords::TYPE => Keywords::JSON];
+        }
 
         if ($this->useNativeTypes) {
             $native = $this->native($object->value, $datatype);
