@@ -40,12 +40,9 @@ final readonly class W3cManifest
                 continue;
             }
 
-            $types = is_array($case['@type'] ?? null) ? $case['@type'] : [];
-
-            if (in_array('jld:NegativeEvaluationTest', $types, true)
-                && ($option['specVersion'] ?? null) === 'json-ld-1.0'
-            ) {
-                // 1.0-only error expectations: in 1.1 the input is legal.
+            if (($option['specVersion'] ?? null) === 'json-ld-1.0') {
+                // JSON-LD 1.0 behaviour (expectations differ from 1.1); the
+                // processor implements 1.1 only.
                 continue;
             }
 

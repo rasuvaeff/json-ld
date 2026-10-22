@@ -30,7 +30,7 @@ final class W3cExpandTest
     private const array SKIPPED = [];
 
     #[DataProvider('suiteProvider')]
-    public function case(string $name, mixed $input, mixed $expected, ?string $expectedError, ?string $base, mixed $expandContext): void
+    public function case(string $name, mixed $input, mixed $expected, ?string $expectedError, ?string $base, mixed $expandContext, ?string $documentUrl = null): void
     {
         $options = new ExpandOptions(
             base: $base,
