@@ -39,9 +39,9 @@ final class ContextProcessor
         '@language',
         '@graph',
         '@graph,@id',
+        '@graph,@set',
         '@graph,@index',
         '@graph,@type',
-        '@set,@graph',
         '@set,@id',
         '@set,@index',
         '@set,@type',
@@ -222,7 +222,7 @@ final class ContextProcessor
             if ($vocab === null) {
                 $builder->setVocab(null);
             } elseif (is_string($vocab)) {
-                $mapping = IriExpansion::expand($builder->freeze(), $vocab, vocab: true);
+                $mapping = IriExpansion::expand($builder->freeze(), $vocab, vocab: true, documentRelative: true);
 
                 if ($mapping === null || !IriExpansion::isAbsolute($mapping)) {
                     throw new InvalidContextException('invalid vocab mapping');

@@ -147,14 +147,46 @@ final class Expander
             );
         }
 
-        // A non-propagating (scoped) context applies to this object only:
-        // entering a node without its own @type reverts to the previous
-        // context. Type-scoped contexts activate in the member loop, in
-        // `@type` order.
+        // A non-propagating (scoped) context applies to this object only.
+        // Entering a node with real properties reverts to the previous
+        // context; bare `@id` references and value objects inherit the
+        // scoped one. Type-scoped contexts activate before the members,
+        // in `@type` order.
         $typeKey = $this->aliasKey($context, $element, Keywords::TYPE);
 
-        if ($context->previousContext !== null && $typeKey === null) {
+        $hasPropertyMember = (bool) array_filter(
+            array_keys($element),
+            static function (string $key) use ($context): bool {
+                $keyword = Keywords::isKeyword($key) ? $key : $context->keywordFor($key);
+
+                return $keyword === null;
+            },
+        );
+
+        if ($context->previousContext !== null && $hasPropertyMember) {
             $context = $context->previousContext;
+        }
+
+        if ($typeKey !== null) {
+            $rawTypes = is_array($element[$typeKey]) && array_is_list($element[$typeKey])
+                ? $element[$typeKey]
+                : [$element[$typeKey]];
+
+            foreach ($rawTypes as $rawType) {
+                if (!is_string($rawType)) {
+                    continue;
+                }
+
+                $typeTerm = $this->lookupTerm($context, $rawType);
+
+                if ($typeTerm?->localContext !== null) {
+                    $context = $this->processor->process(
+                        $context,
+                        $typeTerm->localContext,
+                        new ProcessOptions(loader: $state->loader, base: $context->base, propagate: false),
+                    );
+                }
+            }
         }
 
         $valueKey = $this->aliasKey($context, $element, Keywords::VALUE);
@@ -337,18 +369,6 @@ final class Expander
                 foreach ($types as $type) {
                     if (!is_string($type)) {
                         throw new InvalidContextException('invalid type value');
-                    }
-
-                    // Type-scoped contexts activate in @type order and do
-                    // not propagate to nested nodes.
-                    $typeTerm = $this->lookupTerm($context, $type);
-
-                    if ($typeTerm?->localContext !== null) {
-                        $context = $this->processor->process(
-                            $context,
-                            $typeTerm->localContext,
-                            new ProcessOptions(loader: $state->loader, base: $context->base, propagate: false),
-                        );
                     }
 
                     $expandedType = Keywords::isKeyword($type)
@@ -551,7 +571,9 @@ final class Expander
         $container = $termDefinition->container ?? [];
         $expandedValue = null;
 
-        if (in_array(Keywords::LANGUAGE, $container, true) && is_array($value) && !array_is_list($value)) {
+        if (in_array(Keywords::GRAPH, $container, true)) {
+            $expandedValue = $this->expandGraphContainer($context, $expandedProperty, $termDefinition, $value, $container, $state);
+        } elseif (in_array(Keywords::LANGUAGE, $container, true) && is_array($value) && !array_is_list($value)) {
             $expandedValue = $this->expandLanguageMap($context, $expandedProperty, $termDefinition, $value, $state);
         } elseif (in_array(Keywords::INDEX, $container, true) && is_array($value) && !array_is_list($value)) {
             $expandedValue = $this->expandIndexMap($context, $expandedProperty, $termDefinition, $value, Keywords::INDEX, $state);
@@ -559,10 +581,7 @@ final class Expander
             $expandedValue = $this->expandIdMap($context, $expandedProperty, $termDefinition, $value, $state);
         } elseif (in_array(Keywords::TYPE, $container, true) && is_array($value) && !array_is_list($value)) {
             $expandedValue = $this->expandTypeMap($context, $expandedProperty, $termDefinition, $value, $state);
-        } elseif (in_array(Keywords::GRAPH, $container, true)
-            && (is_array($value) && !array_is_list($value) || is_array($value) && array_is_list($value))
-        ) {
-            $expandedValue = $this->expandGraphContainer($context, $expandedProperty, $termDefinition, $value, $container, $state);
+        } elseif (false) {
         } else {
             if (is_array($value) && array_is_list($value)) {
                 if (in_array(Keywords::LIST, $container, true)) {
@@ -835,33 +854,58 @@ final class Expander
         array $container,
         ExpansionState $state,
     ): array {
-        $entries = is_array($value) && !array_is_list($value)
-            ? $value
-            // A list value wraps each item into its own named graph.
-            : [null => is_array($value) && array_is_list($value) ? $value : [$value]];
-
         $result = [];
 
-        foreach ($entries as $key => $items) {
+        $wrap = function (mixed $items, ?string $key) use ($context, $container, $state): array {
             $node = [];
 
             if (in_array(Keywords::ID, $container, true) && $key !== null) {
-                $node[Keywords::ID] = IriExpansion::expand($context, (string) $key, documentRelative: true);
+                $node[Keywords::ID] = IriExpansion::expand($context, $key, documentRelative: true);
             }
 
             if (in_array(Keywords::INDEX, $container, true) && $key !== null) {
-                $node[Keywords::INDEX] = (string) $key;
+                $node[Keywords::INDEX] = $key;
             }
 
             if (in_array(Keywords::TYPE, $container, true) && $key !== null) {
-                $this->addValue($node, Keywords::TYPE, IriExpansion::expand($context, (string) $key, vocab: true), true);
+                $this->addValue($node, Keywords::TYPE, IriExpansion::expand($context, $key, vocab: true), true);
             }
 
             $expanded = $this->expandElement($context, Keywords::GRAPH, null, $items, new ExpansionState(loader: $state->loader));
 
+            if ($expanded === null) {
+                return [];
+            }
+
             $node[Keywords::GRAPH] = is_array($expanded) && array_is_list($expanded) ? $expanded : [$expanded];
 
-            $result[] = $node;
+            return $node;
+        };
+
+        if (is_array($value) && !array_is_list($value)) {
+            foreach ($value as $key => $items) {
+                $node = $wrap($items, (string) $key);
+
+                if ($node !== []) {
+                    $result[] = $node;
+                }
+            }
+
+            return $result;
+        }
+
+        $items = is_array($value) && array_is_list($value) ? $value : [$value];
+
+        foreach ($items as $item) {
+            if ($item === null) {
+                continue;
+            }
+
+            $node = $wrap($item, null);
+
+            if ($node !== []) {
+                $result[] = $node;
+            }
         }
 
         return $result;

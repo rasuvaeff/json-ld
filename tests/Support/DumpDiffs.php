@@ -5,9 +5,11 @@ declare(strict_types=1);
 require __DIR__ . '/../../vendor/autoload.php';
 
 use Rasuvaeff\JsonLd\ExpandOptions;
+use Rasuvaeff\JsonLd\Exception\JsonLdException;
 use Rasuvaeff\JsonLd\JsonLd;
 use Rasuvaeff\JsonLd\Tests\Support\FixtureContextLoader;
 use Rasuvaeff\JsonLd\Tests\Support\W3cManifest;
+use Rasuvaeff\JsonLd\Tests\W3cExpandTest;
 use Rasuvaeff\JsonLd\Tests\W3cToRdfTest;
 
 $loader = new FixtureContextLoader();
@@ -20,6 +22,34 @@ foreach ((new W3cManifest())->cases($suite) as $name => $case) {
     }
 
     $opts = new ExpandOptions(base: $case['base'], expandContext: $case['expandContext'], loader: $loader);
+
+    if ($suite === 'expand') {
+        try {
+            $got = W3cExpandTest::canonical(JsonLd::expand((array) $case['input'], $opts));
+        } catch (JsonLdException $e) {
+            if ($e->getMessage() === $case['expectedError']) {
+                continue;
+            }
+
+            echo "== {$name}\n   THROWN: {$e->getMessage()} (want: " . ($case['expectedError'] ?? 'success') . ")\n";
+
+            continue;
+        }
+
+        if ($case['expectedError'] !== null) {
+            echo "== {$name}\n   NO ERROR (want: {$case['expectedError']})\n";
+
+            continue;
+        }
+
+        $want = W3cExpandTest::canonical($case['expected']);
+
+        if ($got !== $want) {
+            echo "== {$name}\n   GOT:  {$got}\n   WANT: {$want}\n";
+        }
+
+        continue;
+    }
 
     try {
         $got = JsonLd::serializeNQuads(JsonLd::toRdf((array) $case['input'], $opts));
@@ -58,3 +88,4 @@ foreach ((new W3cManifest())->cases($suite) as $name => $case) {
         echo "   + {$line}\n";
     }
 }
+

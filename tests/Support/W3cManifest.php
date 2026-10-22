@@ -42,6 +42,15 @@ final readonly class W3cManifest
 
             $types = is_array($case['@type'] ?? null) ? $case['@type'] : [];
 
+            if (in_array('jld:NegativeEvaluationTest', $types, true)
+                && ($option['specVersion'] ?? null) === 'json-ld-1.0'
+            ) {
+                // 1.0-only error expectations: in 1.1 the input is legal.
+                continue;
+            }
+
+            $types = is_array($case['@type'] ?? null) ? $case['@type'] : [];
+
             $negative = in_array('jld:NegativeEvaluationTest', $types, true);
             $syntaxOnly = in_array('jld:PositiveSyntaxTest', $types, true);
 
