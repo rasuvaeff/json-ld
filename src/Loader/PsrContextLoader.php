@@ -7,6 +7,7 @@ namespace Rasuvaeff\JsonLd\Loader;
 use Psr\Http\Client\ClientExceptionInterface;
 use Psr\Http\Client\ClientInterface;
 use Psr\Http\Message\RequestFactoryInterface;
+use Psr\Http\Message\RequestInterface;
 use Rasuvaeff\JsonLd\Exception\DocumentLoadingException;
 use Rasuvaeff\JsonLd\Exception\InvalidJsonException;
 use Rasuvaeff\JsonLd\Json;
@@ -51,6 +52,8 @@ final readonly class PsrContextLoader implements ContextLoaderInterface
             throw new DocumentLoadingException(sprintf('The URL policy refused "%s"', $reference));
         }
 
+        // psr/http-message 1.0 declares withHeader() as returning MessageInterface, 1.1 and 2.0 return static
+        /** @var RequestInterface $request */
         $request = $this->requestFactory
             ->createRequest('GET', $reference)
             ->withHeader('Accept', self::ACCEPT);
