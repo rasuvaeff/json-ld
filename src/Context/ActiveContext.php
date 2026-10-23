@@ -11,7 +11,7 @@ namespace Rasuvaeff\JsonLd\Context;
  * Instances are copied (`clone`) before the processor changes them; they
  * must not be mutated once handed to the expansion.
  *
- * @api
+ * @internal
  */
 final class ActiveContext
 {

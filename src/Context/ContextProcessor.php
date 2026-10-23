@@ -18,7 +18,7 @@ use Rasuvaeff\JsonLd\Loader\ContextLoaderInterface;
  * code from the W3C test suite (for example `invalid @version value`).
  * Remote contexts are loaded only through the injected loader.
  *
- * @api
+ * @internal
  *
  * @psalm-import-type JsonValue from \Rasuvaeff\JsonLd\Json
  */

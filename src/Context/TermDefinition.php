@@ -7,7 +7,7 @@ namespace Rasuvaeff\JsonLd\Context;
 /**
  * An immutable term definition, JSON-LD 1.1 API section 4.2.
  *
- * @api
+ * @internal
  */
 final readonly class TermDefinition
 {

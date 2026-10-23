@@ -17,7 +17,7 @@ use Rasuvaeff\JsonLd\Keywords;
  *
  * The result is a document in expanded form.
  *
- * @api
+ * @internal
  *
  * @psalm-import-type JsonValue from \Rasuvaeff\JsonLd\Json
  * @psalm-type NodeShape = array{id: string, types: list<string>, props: array<string, list<ArrayObject<string, mixed>>>}

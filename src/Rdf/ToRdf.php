@@ -18,7 +18,7 @@ use Rasuvaeff\JsonLd\NodeMap;
  * Nodes, properties and values that are not well-formed IRIs or blank node
  * identifiers are skipped, as the algorithm requires.
  *
- * @api
+ * @internal
  *
  * @psalm-import-type JsonValue from \Rasuvaeff\JsonLd\Json
  */
