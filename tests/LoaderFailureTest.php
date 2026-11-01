@@ -10,6 +10,7 @@ use Rasuvaeff\JsonLd\Exception\DocumentLoadingException;
 use Rasuvaeff\JsonLd\Exception\ErrorCode;
 use Rasuvaeff\JsonLd\Exception\InvalidContextException;
 use Rasuvaeff\JsonLd\JsonLd;
+use Rasuvaeff\JsonLd\Loader\MapContextLoader;
 use Rasuvaeff\JsonLd\ProcessingOptions;
 use Rasuvaeff\JsonLd\Tests\Support\ThrowingContextLoader;
 use Testo\Assert;
@@ -71,11 +72,27 @@ final class LoaderFailureTest
         Assert::same($caught?->getPrevious(), $failure);
     }
 
+    public function aFailingScopedContextIsAnInvalidScopedContext(): void
+    {
+        // Create Term Definition validates a scoped context and reports any error as
+        // invalid scoped context; the loading failure stays reachable as the previous one
+        $caught = $this->catch(static fn(): array => JsonLd::expand(
+            ['@context' => ['t' => ['@id' => 'http://s/t', '@context' => 'https://unknown/']], 't' => ['http://s/p' => 'x']],
+            new ProcessingOptions(loader: new MapContextLoader([])),
+        ));
+        $previous = $caught?->getPrevious();
+
+        Assert::instanceOf($caught, InvalidContextException::class);
+        Assert::same($caught?->errorCode(), ErrorCode::InvalidScopedContext);
+        Assert::instanceOf($previous, DocumentLoadingException::class);
+        Assert::same($previous instanceof DocumentLoadingException ? $previous->errorCode() : null, ErrorCode::LoadingRemoteContextFailed);
+    }
+
     public function aContextDocumentWithoutContextIsAnInvalidRemoteContext(): void
     {
         $caught = $this->catch(static fn(): array => JsonLd::expand(
             ['@context' => 'https://example.com/ctx', 'http://s/p' => 'v'],
-            new ProcessingOptions(loader: new \Rasuvaeff\JsonLd\Loader\MapContextLoader(['https://example.com/ctx' => ['name' => 'x']])),
+            new ProcessingOptions(loader: new MapContextLoader(['https://example.com/ctx' => ['name' => 'x']])),
         ));
 
         Assert::instanceOf($caught, InvalidContextException::class);

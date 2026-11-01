@@ -34,7 +34,9 @@ meant to become 1.0 unchanged.
   `DocumentLoadingException` with the loader's exception as the previous one:
   `loading remote context failed` for contexts (it was an `InvalidContextException`,
   and non-`DocumentLoadingException` throwables escaped unwrapped), `loading document failed`
-  for a document URL. Migration: catch `DocumentLoadingException`/`JsonLdException`
+  for a document URL (inside a term's scoped `@context` the W3C algorithm still reports
+  `invalid scoped context`, now with the `DocumentLoadingException` as previous).
+  Migration: catch `DocumentLoadingException`/`JsonLdException`
   instead of `InvalidContextException` or `RuntimeException`.
 - **BC:** exceptions carry an error code: `JsonLdException::errorCode(): ErrorCode` (W3C
   JSON-LD 1.1 API codes plus `recursive context inclusion` and four processor codes:
@@ -54,7 +56,9 @@ meant to become 1.0 unchanged.
   `Rdf\HashAlgorithm` (SHA-256, SHA-384) and `Exception\CanonicalizationLimitException`:
   poison graphs stop after `workFactor × n` Hash N-Degree Quads runs per blank node
   (default factor 4). The W3C rdf-canon suite passes 86 of 86 (64 evaluation, 21 map,
-  1 negative), nothing skipped.
+  1 negative), nothing skipped. Documented limitation of the specification: blank nodes that
+  differ only in which named graph their relations live in tie, and the input quad order
+  decides between equally valid canonical forms.
 - **BC:** `rdfDirection` of `JsonLd::toRdf()`/`fromRdf()` is the enum `RdfDirection`
   (`I18nDatatype`, `CompoundLiteral`). Migration: `'i18n-datatype'` →
   `RdfDirection::I18nDatatype`, `'compound-literal'` → `RdfDirection::CompoundLiteral`.

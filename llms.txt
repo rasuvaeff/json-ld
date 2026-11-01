@@ -18,7 +18,9 @@ Runtime deps: `ext-json`, `ext-mbstring`, `psr/http-client ^1.0`,
   takes a URL policy closure and a body size limit.
 - Branch on `JsonLdException::errorCode(): ErrorCode`, not on the message.
 - Any Throwable from a loader surfaces as `DocumentLoadingException`
-  (`loading remote context failed` / `loading document failed`), original as `getPrevious()`.
+  (`loading remote context failed` / `loading document failed`), original as `getPrevious()`;
+  inside a term's scoped `@context` the W3C algorithm reports `invalid scoped context`
+  with that `DocumentLoadingException` as previous.
 - Scope: expansion, flattening, node API, toRdf/fromRdf, N-Quads, RDFC-1.0.
   Not implemented: compaction, framing, JSON-LD 1.0 processing mode.
 - Compare RDF with `Dataset::equals()` (RDFC-1.0 isomorphism), not text.
@@ -86,6 +88,10 @@ Poison graphs: Hash N-Degree Quads may run `workFactor × n` times per blank nod
 (n = blank nodes with a shared first-degree hash); beyond that
 `CanonicalizationLimitException` (`canonicalization limit exceeded`). `equals()`,
 `canonicalNQuads()` and `canonicalHash()` can throw it.
+Spec limitation: Hash Related Blank Node ignores graph names, so blank nodes that differ only
+in which named graph their relations live in tie, and quad order decides; such isomorphic
+datasets in another quad order may not be `equals()`. Labels never matter; default-graph-only
+datasets are not affected in testing.
 
 Exceptions (all extend `Exception\JsonLdException`, `errorCode(): Exception\ErrorCode`):
 `InvalidContextException`, `InvalidInputException`, `ContextRecursionException`,

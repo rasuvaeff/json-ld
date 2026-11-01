@@ -52,6 +52,24 @@ final readonly class DatasetGenerators
         return $text;
     }
 
+    /**
+     * `_:n0` and `_:n1` relate to `_:n4` and `_:n2`, one relation in `<http://g2>`, the other
+     * in the default graph, the other way round: their Hash N-Degree Quads results tie.
+     *
+     * @return list<array{string, string, string, string}>
+     */
+    public static function namedGraphTie(): array
+    {
+        return [
+            ['_:n1', '<http://p0>', '_:n2', '<http://g2>'],
+            ['_:n3', '<http://p0>', '_:n2', '<http://g1>'],
+            ['_:n1', '<http://p0>', '_:n4', ''],
+            ['_:n0', '<http://p0>', '_:n4', '<http://g2>'],
+            ['_:n0', '<http://p0>', '_:n2', ''],
+            ['_:n4', '<http://p0>', '_:n2', '<http://g2>'],
+        ];
+    }
+
     private static function row(): ArbitraryInterface
     {
         $blank = Gen::elements(array_map(static fn(string $label): string => '_:' . $label, self::LABELS));

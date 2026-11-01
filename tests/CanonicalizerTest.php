@@ -133,6 +133,39 @@ final class CanonicalizerTest
         Assert::same(count((new Canonicalizer(workFactor: 2))->canonicalize($dataset)->issuedIdentifiers), 5);
     }
 
+    public function relabellingNeverChangesTheFormEvenWhenNamedGraphRelationsTie(): void
+    {
+        // _:n0 and _:n1 relate to the same two nodes, one relation in <http://g2>, the other
+        // in the default graph, but the other way round: Hash Related Blank Node does not
+        // include the graph name, so their N-degree hashes tie
+        $rows = DatasetGenerators::namedGraphTie();
+        $expected = JsonLd::parseNQuads(DatasetGenerators::nquads($rows))->canonicalNQuads();
+
+        for ($seed = 1; $seed <= 12; $seed++) {
+            $randomizer = new Randomizer(new Mt19937($seed));
+            $labels = array_combine(
+                DatasetGenerators::LABELS,
+                array_map(static fn(string $label): string => 'r' . $label, $randomizer->shuffleArray(DatasetGenerators::LABELS)),
+            );
+
+            Assert::same(JsonLd::parseNQuads(DatasetGenerators::nquads($rows, $labels))->canonicalNQuads(), $expected);
+        }
+    }
+
+    public function knownLimitationQuadOrderBreaksNamedGraphTies(): void
+    {
+        // RDFC-1.0 as specified: the tie above is broken by the order of the input, so the
+        // same dataset in another quad order gets another (equally valid) canonical form
+        $rows = DatasetGenerators::namedGraphTie();
+        $reordered = [$rows[4], $rows[0], $rows[1], $rows[2], $rows[3], $rows[5]];
+
+        $original = JsonLd::parseNQuads(DatasetGenerators::nquads($rows));
+        $shuffled = JsonLd::parseNQuads(DatasetGenerators::nquads($reordered));
+
+        Assert::false($original->canonicalNQuads() === $shuffled->canonicalNQuads());
+        Assert::false($original->equals($shuffled));
+    }
+
     public function theWorkFactorMustBePositive(): void
     {
         $message = null;
@@ -148,7 +181,7 @@ final class CanonicalizerTest
     }
 
     #[Property(runs: 150)]
-    public function canonicalFormIgnoresLabelsOrderAndDuplicates(array $dataset, int $seed): void
+    public function canonicalFormIgnoresLabelsAndDuplicates(array $dataset, int $seed): void
     {
         $randomizer = new Randomizer(new Mt19937($seed));
         $rows = $dataset['rows'];
@@ -156,10 +189,9 @@ final class CanonicalizerTest
             DatasetGenerators::LABELS,
             array_map(static fn(string $label): string => 'r' . $label, $randomizer->shuffleArray(DatasetGenerators::LABELS)),
         );
-        $shuffled = $randomizer->shuffleArray([...$rows, $rows[0]]);
 
         $original = JsonLd::parseNQuads(DatasetGenerators::nquads($rows));
-        $renamed = JsonLd::parseNQuads(DatasetGenerators::nquads($shuffled, $labels));
+        $renamed = JsonLd::parseNQuads(DatasetGenerators::nquads([...$rows, $rows[0]], $labels));
 
         Classify::cover($dataset['kind'] === 'cycle', 'symmetric blank nodes', 10);
         Classify::cover($dataset['kind'] === 'random', 'random rows', 50);
@@ -170,16 +202,48 @@ final class CanonicalizerTest
     }
 
     /** @return array<string, ArbitraryInterface> */
-    public static function canonicalFormIgnoresLabelsOrderAndDuplicatesGenerators(): array
+    public static function canonicalFormIgnoresLabelsAndDuplicatesGenerators(): array
     {
         return ['dataset' => DatasetGenerators::dataset(), 'seed' => DatasetGenerators::seed()];
     }
 
     /** @return iterable<string, array{array, int}> */
-    public static function canonicalFormIgnoresLabelsOrderAndDuplicatesExamples(): iterable
+    public static function canonicalFormIgnoresLabelsAndDuplicatesExamples(): iterable
     {
         yield 'symmetric pair' => [['kind' => 'cycle', 'rows' => [['_:n0', '<http://p>', '_:n1', ''], ['_:n1', '<http://p>', '_:n0', '']]], 7];
         yield 'blank graph name' => [['kind' => 'random', 'rows' => [['_:n0', '<http://p>', '_:n1', '_:n4'], ['_:n4', '<http://q>', '"x"', '']]], 3];
+        yield 'named graph tie' => [['kind' => 'random', 'rows' => DatasetGenerators::namedGraphTie()], 5];
+    }
+
+    #[Property(runs: 150)]
+    public function canonicalFormOfTriplesIgnoresStatementOrder(array $dataset, int $seed): void
+    {
+        $randomizer = new Randomizer(new Mt19937($seed));
+        $rows = array_map(static fn(array $row): array => [$row[0], $row[1], $row[2], ''], $dataset['rows']);
+        $labels = array_combine(
+            DatasetGenerators::LABELS,
+            array_map(static fn(string $label): string => 'r' . $label, $randomizer->shuffleArray(DatasetGenerators::LABELS)),
+        );
+
+        $original = JsonLd::parseNQuads(DatasetGenerators::nquads($rows));
+        $shuffled = JsonLd::parseNQuads(DatasetGenerators::nquads($randomizer->shuffleArray([...$rows, $rows[0]]), $labels));
+
+        Classify::cover($dataset['kind'] === 'cycle', 'symmetric blank nodes', 10);
+
+        Assert::same($shuffled->canonicalNQuads(), $original->canonicalNQuads());
+        Assert::true($shuffled->equals($original));
+    }
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function canonicalFormOfTriplesIgnoresStatementOrderGenerators(): array
+    {
+        return ['dataset' => DatasetGenerators::dataset(), 'seed' => DatasetGenerators::seed()];
+    }
+
+    /** @return iterable<string, array{array, int}> */
+    public static function canonicalFormOfTriplesIgnoresStatementOrderExamples(): iterable
+    {
+        yield 'symmetric pair' => [['kind' => 'cycle', 'rows' => [['_:n0', '<http://p>', '_:n1', ''], ['_:n1', '<http://p>', '_:n0', '']]], 7];
         yield 'self loop' => [['kind' => 'random', 'rows' => [['_:n2', '<http://p>', '_:n2', '']]], 11];
     }
 

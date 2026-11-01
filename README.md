@@ -138,6 +138,14 @@ blank nodes that share their first-degree hash, Hash N-Degree Quads may run at m
 a list of equal values — need about `n` runs per blank node. `canonicalNQuads()`,
 `canonicalHash()` and `equals()` can throw it too.
 
+**Known limitation of RDFC-1.0 as specified.** Hash Related Blank Node does not include
+the graph name of a relation. When two blank nodes differ only in *which graph* their
+relations live in (`_:a p _:x` in `<g>` and `_:a p _:y` in the default graph, `_:b` the
+other way round), their hashes tie and the specification breaks the tie by input order:
+the same dataset in another quad order can get another, equally valid canonical form, and
+`equals()` then returns `false`. Blank node labels never matter, and datasets without
+named graphs were not affected in any of 180 000 generated orderings.
+
 ### Errors
 
 Every exception extends `Exception\JsonLdException`; `errorCode()` returns an
@@ -163,7 +171,10 @@ API error code.
 **Whatever a loader throws** — a `DocumentLoadingException`, a PSR-18 exception, any
 `Throwable` — reaches the caller as a `DocumentLoadingException`: `loading remote
 context failed` for a context, `loading document failed` for the document itself, with
-the loader's exception as `getPrevious()`.
+the loader's exception as `getPrevious()`. One exception, from the W3C algorithm itself:
+a scoped context of a term definition that fails to load is reported as
+`invalid scoped context` (`InvalidContextException`), with the `DocumentLoadingException`
+as its previous one.
 
 ## Security
 

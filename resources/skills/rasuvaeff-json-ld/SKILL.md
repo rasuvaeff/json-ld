@@ -30,7 +30,9 @@ JSON-LD; emitting schema.org markup is rasuvaeff/yii3-seo's job.
    through the `ContextLoaderInterface` passed in `ProcessingOptions(loader: …)`.
    The default `InlineContextLoader` refuses every URL, and a document that
    references a remote context then fails with `loading remote context failed`.
-   Whatever a loader throws reaches the caller as `DocumentLoadingException`.
+   Whatever a loader throws reaches the caller as `DocumentLoadingException`
+   (inside a term's scoped `@context`: `invalid scoped context`, the loading
+   failure as previous).
 
 2. **Treat documents as untrusted, and so their contexts.** A hostile page can
    point `@context` at an internal address (SSRF) or at a huge file. When you
@@ -98,6 +100,7 @@ N-Quads and datasets:
 $dataset = JsonLd::parseNQuads($text);          // comments and blank lines allowed
 $dataset->equals($other);                       // RDFC-1.0 isomorphism
 $dataset->canonicalHash();                      // SHA-256 of the canonical N-Quads
+// RDFC-1.0 limitation: with named graphs, quad order can decide ties (see README)
 JsonLd::fromRdf($dataset, useNativeTypes: true);
 ```
 

@@ -70,12 +70,20 @@ make release-check
   codes for JSON-LD failures, the four processor codes for the rest. New failure →
   pick an existing W3C code or add a processor case, never a bare message.
   `DocumentExpansion::run()` and `ContextProcessor::load()` wrap **every**
-  `Throwable` from a loader in `DocumentLoadingException`; keep it that way.
+  `Throwable` from a loader in `DocumentLoadingException`; keep it that way. The one
+  place it is re-wrapped is scoped-context validation (W3C Create Term Definition:
+  any error → `invalid scoped context`), tested in `LoaderFailureTest`.
 - **Canonicalization work limit.** `Canonicalizer::DEFAULT_WORK_FACTOR` (4) is
   calibrated: W3C test044–046 need 43 Hash N-Degree Quads runs for one of 12
   non-unique blank nodes (factor 3.6), the 10-node clique (test074) must fail fast,
   cycles and lists of equal values need about 1. Lowering it below 4 breaks the
   suite; raising it makes poison graphs more expensive (`factor × n²` calls).
+- **RDFC-1.0 named-graph ties are a spec limitation, not a bug to fix here.** Hash
+  Related Blank Node ignores graph names, so `CanonicalizerTest::knownLimitationQuadOrderBreaksNamedGraphTies`
+  shows two quad orders of one dataset with different canonical forms. Do not "fix" it by
+  hashing the graph name: hashes would stop matching every other RDFC-1.0 implementation.
+  The order-invariance property is therefore tested on triples only
+  (`canonicalFormOfTriplesIgnoresStatementOrder`); relabelling is tested with graphs.
 - `Graph\Document` is built from `NodeMap` (same as flatten): blank node labels are
   issued by the node map, so they change whenever node-map traversal order changes —
   that is a visible behaviour change, note it in the CHANGELOG.
