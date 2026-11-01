@@ -9,6 +9,8 @@ use Psr\Http\Message\RequestFactoryInterface;
 use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ResponseInterface;
 use Rasuvaeff\JsonLd\Exception\DocumentLoadingException;
+use Rasuvaeff\JsonLd\Json;
+use Rasuvaeff\JsonLd\Loader\LoadedContext;
 use Rasuvaeff\JsonLd\Loader\PsrContextLoader;
 use Testo\Assert;
 use Testo\Codecov\Covers;
@@ -16,6 +18,8 @@ use Testo\Test;
 
 #[Test]
 #[Covers(PsrContextLoader::class)]
+#[Covers(LoadedContext::class)]
+#[Covers(Json::class)]
 final class PsrContextLoaderTest
 {
     public function urlPolicyIsConsultedBeforeAnyRequest(): void

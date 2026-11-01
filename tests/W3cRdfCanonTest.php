@@ -8,10 +8,19 @@ use Rasuvaeff\JsonLd\Exception\CanonicalizationLimitException;
 use Rasuvaeff\JsonLd\Exception\ErrorCode;
 use Rasuvaeff\JsonLd\Json;
 use Rasuvaeff\JsonLd\JsonLd;
+use Rasuvaeff\JsonLd\Rdf\BlankNode;
+use Rasuvaeff\JsonLd\Rdf\CanonicalForm;
 use Rasuvaeff\JsonLd\Rdf\CanonicalizationRun;
 use Rasuvaeff\JsonLd\Rdf\Canonicalizer;
+use Rasuvaeff\JsonLd\Rdf\Dataset;
 use Rasuvaeff\JsonLd\Rdf\HashAlgorithm;
 use Rasuvaeff\JsonLd\Rdf\IdentifierIssuer;
+use Rasuvaeff\JsonLd\Rdf\Iri;
+use Rasuvaeff\JsonLd\Rdf\Literal;
+use Rasuvaeff\JsonLd\Rdf\NQuads;
+use Rasuvaeff\JsonLd\Rdf\NQuadsWriter;
+use Rasuvaeff\JsonLd\Rdf\Quad;
+use Rasuvaeff\JsonLd\Rdf\Vocabulary;
 use Testo\Assert;
 use Testo\Codecov\Covers;
 use Testo\Data\DataProvider;
@@ -27,6 +36,15 @@ use Testo\Test;
 #[Covers(Canonicalizer::class)]
 #[Covers(CanonicalizationRun::class)]
 #[Covers(IdentifierIssuer::class)]
+#[Covers(Dataset::class)]
+#[Covers(Quad::class)]
+#[Covers(Literal::class)]
+#[Covers(BlankNode::class)]
+#[Covers(Iri::class)]
+#[Covers(Vocabulary::class)]
+#[Covers(NQuads::class)]
+#[Covers(NQuadsWriter::class)]
+#[Covers(CanonicalForm::class)]
 final class W3cRdfCanonTest
 {
     private const string FIXTURES = __DIR__ . '/fixtures/rdf-canon/';
