@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Rasuvaeff\JsonLd\Tests;
 
 use Rasuvaeff\JsonLd\Exception\DocumentLoadingException;
+use Rasuvaeff\JsonLd\Json;
+use Rasuvaeff\JsonLd\Loader\LoadedContext;
 use Rasuvaeff\JsonLd\Loader\PsrContextLoader;
 use Rasuvaeff\JsonLd\Tests\Support\ReachedRequestFactory;
 use Rasuvaeff\JsonLd\Tests\Support\UnusedHttpClient;
@@ -14,6 +16,8 @@ use Testo\Test;
 
 #[Test]
 #[Covers(PsrContextLoader::class)]
+#[Covers(LoadedContext::class)]
+#[Covers(Json::class)]
 final class PsrContextLoaderSchemeTest
 {
     public function acceptsHttpAndHttpsInAnyCaseWithoutAPolicy(): void

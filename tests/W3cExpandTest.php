@@ -4,12 +4,22 @@ declare(strict_types=1);
 
 namespace Rasuvaeff\JsonLd\Tests;
 
+use Rasuvaeff\JsonLd\Context\ActiveContext;
+use Rasuvaeff\JsonLd\Context\ContextProcessor;
+use Rasuvaeff\JsonLd\Context\DefinitionScope;
+use Rasuvaeff\JsonLd\Context\Syntax;
+use Rasuvaeff\JsonLd\Context\TermDefinition;
 use Rasuvaeff\JsonLd\DocumentExpansion;
 use Rasuvaeff\JsonLd\Exception\JsonLdException;
 use Rasuvaeff\JsonLd\Expander;
+use Rasuvaeff\JsonLd\ExpansionRun;
+use Rasuvaeff\JsonLd\Iri;
 use Rasuvaeff\JsonLd\Json;
 use Rasuvaeff\JsonLd\JsonLd;
 use Rasuvaeff\JsonLd\Keywords;
+use Rasuvaeff\JsonLd\Loader\InlineContextLoader;
+use Rasuvaeff\JsonLd\Loader\LoadedContext;
+use Rasuvaeff\JsonLd\Loader\MapContextLoader;
 use Rasuvaeff\JsonLd\ProcessingOptions;
 use Rasuvaeff\JsonLd\Tests\Support\FixtureContextLoader;
 use Rasuvaeff\JsonLd\Tests\Support\W3cManifest;
@@ -21,6 +31,20 @@ use Testo\Test;
 #[Test]
 #[Covers(Expander::class)]
 #[Covers(DocumentExpansion::class)]
+#[Covers(ExpansionRun::class)]
+#[Covers(JsonLd::class)]
+#[Covers(Json::class)]
+#[Covers(Keywords::class)]
+#[Covers(Iri::class)]
+#[Covers(ProcessingOptions::class)]
+#[Covers(ContextProcessor::class)]
+#[Covers(ActiveContext::class)]
+#[Covers(Syntax::class)]
+#[Covers(TermDefinition::class)]
+#[Covers(DefinitionScope::class)]
+#[Covers(InlineContextLoader::class)]
+#[Covers(MapContextLoader::class)]
+#[Covers(LoadedContext::class)]
 final class W3cExpandTest
 {
     /**

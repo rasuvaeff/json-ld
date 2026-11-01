@@ -9,12 +9,20 @@ use Random\Randomizer;
 use Rasuvaeff\JsonLd\Exception\CanonicalizationLimitException;
 use Rasuvaeff\JsonLd\Exception\ErrorCode;
 use Rasuvaeff\JsonLd\JsonLd;
+use Rasuvaeff\JsonLd\Rdf\BlankNode;
 use Rasuvaeff\JsonLd\Rdf\CanonicalForm;
 use Rasuvaeff\JsonLd\Rdf\CanonicalizationRun;
 use Rasuvaeff\JsonLd\Rdf\Canonicalizer;
 use Rasuvaeff\JsonLd\Rdf\Dataset;
 use Rasuvaeff\JsonLd\Rdf\HashAlgorithm;
 use Rasuvaeff\JsonLd\Rdf\IdentifierIssuer;
+use Rasuvaeff\JsonLd\Rdf\Iri;
+use Rasuvaeff\JsonLd\Rdf\JsonCanonicalizer;
+use Rasuvaeff\JsonLd\Rdf\Literal;
+use Rasuvaeff\JsonLd\Rdf\NQuads;
+use Rasuvaeff\JsonLd\Rdf\NQuadsWriter;
+use Rasuvaeff\JsonLd\Rdf\Quad;
+use Rasuvaeff\JsonLd\Rdf\Vocabulary;
 use Rasuvaeff\JsonLd\Tests\Support\DatasetGenerators;
 use Rasuvaeff\PropertyTesting\ArbitraryInterface;
 use Rasuvaeff\PropertyTesting\Classify;
@@ -30,6 +38,15 @@ use Testo\Test;
 #[Covers(IdentifierIssuer::class)]
 #[Covers(HashAlgorithm::class)]
 #[Covers(Dataset::class)]
+#[Covers(JsonLd::class)]
+#[Covers(Quad::class)]
+#[Covers(Literal::class)]
+#[Covers(BlankNode::class)]
+#[Covers(Vocabulary::class)]
+#[Covers(NQuads::class)]
+#[Covers(NQuadsWriter::class)]
+#[Covers(JsonCanonicalizer::class)]
+#[Covers(Iri::class)]
 final class CanonicalizerTest
 {
     public function issuesCanonicalLabelsInOrder(): void

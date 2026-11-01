@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+- Mutation testing now counts code that no test credits (`infection --with-uncovered`), so the
+  `minMsi` gate measures the whole of `src/` instead of only the lines a test names in `#[Covers]`.
+  Tests were credited with the classes they execute, and new tests were added for the previously
+  hidden logic: context term definitions, the PSR-18 and inline context loaders, JSON
+  canonicalization. No `src/` changes.
+
 ## 1.0.0 — 2026-11-01
 
 - Stable release. The public API and behaviour are those of 0.2.0, checked

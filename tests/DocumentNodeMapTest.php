@@ -4,12 +4,27 @@ declare(strict_types=1);
 
 namespace Rasuvaeff\JsonLd\Tests;
 
+use Rasuvaeff\JsonLd\Context\ActiveContext;
+use Rasuvaeff\JsonLd\Context\ContextProcessor;
+use Rasuvaeff\JsonLd\Context\DefinitionScope;
+use Rasuvaeff\JsonLd\Context\Syntax;
+use Rasuvaeff\JsonLd\Context\TermDefinition;
+use Rasuvaeff\JsonLd\DocumentExpansion;
+use Rasuvaeff\JsonLd\Expander;
+use Rasuvaeff\JsonLd\ExpansionRun;
+use Rasuvaeff\JsonLd\Flattener;
 use Rasuvaeff\JsonLd\Graph\Document;
 use Rasuvaeff\JsonLd\Graph\Graph;
 use Rasuvaeff\JsonLd\Graph\Node;
 use Rasuvaeff\JsonLd\Graph\Value;
+use Rasuvaeff\JsonLd\Iri;
+use Rasuvaeff\JsonLd\Json;
 use Rasuvaeff\JsonLd\JsonLd;
+use Rasuvaeff\JsonLd\Keywords;
+use Rasuvaeff\JsonLd\Loader\InlineContextLoader;
+use Rasuvaeff\JsonLd\Loader\LoadedContext;
 use Rasuvaeff\JsonLd\Loader\MapContextLoader;
+use Rasuvaeff\JsonLd\NodeMap;
 use Rasuvaeff\JsonLd\ProcessingOptions;
 use Rasuvaeff\JsonLd\Tests\Support\Strict;
 use Testo\Assert;
@@ -24,6 +39,25 @@ use Testo\Test;
 #[Covers(Document::class)]
 #[Covers(Graph::class)]
 #[Covers(Node::class)]
+#[Covers(ExpansionRun::class)]
+#[Covers(JsonLd::class)]
+#[Covers(Json::class)]
+#[Covers(Keywords::class)]
+#[Covers(Iri::class)]
+#[Covers(ProcessingOptions::class)]
+#[Covers(ContextProcessor::class)]
+#[Covers(ActiveContext::class)]
+#[Covers(Syntax::class)]
+#[Covers(TermDefinition::class)]
+#[Covers(DefinitionScope::class)]
+#[Covers(InlineContextLoader::class)]
+#[Covers(MapContextLoader::class)]
+#[Covers(LoadedContext::class)]
+#[Covers(DocumentExpansion::class)]
+#[Covers(Expander::class)]
+#[Covers(Value::class)]
+#[Covers(NodeMap::class)]
+#[Covers(Flattener::class)]
 final class DocumentNodeMapTest
 {
     private const string SCHEMA = 'https://schema.org/';
