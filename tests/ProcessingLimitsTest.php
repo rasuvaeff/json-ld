@@ -89,7 +89,8 @@ final class ProcessingLimitsTest
         $caught = $this->catch(static fn(): array => JsonLd::expand('{"a": '));
 
         Assert::same($caught?->errorCode(), ErrorCode::LoadingDocumentFailed);
-        Assert::same($caught?->getMessage(), 'Syntax error');
+        // PHP 8.6 adds the location ("Syntax error near location 1:7")
+        Assert::true(str_starts_with((string) $caught?->getMessage(), 'Syntax error'));
         Assert::instanceOf($caught?->getPrevious(), \JsonException::class);
     }
 
