@@ -5,8 +5,9 @@ declare(strict_types=1);
 namespace Rasuvaeff\JsonLd\Graph;
 
 /**
- * A JSON-LD graph: an immutable set of nodes built from expanded node
- * objects.
+ * A JSON-LD graph: an immutable set of nodes built from node objects in
+ * flattened form, where every node has an `@id` and refers to other nodes
+ * with `{"@id": …}` references.
  *
  * @api
  */
@@ -19,20 +20,21 @@ final readonly class Graph
     private array $nodes;
 
     /**
-     * @param list<array<array-key, mixed>> $expanded list of expanded node objects
+     * @param array<array-key, array<array-key, mixed>> $nodes node objects in flattened form, for example one graph of
+     *                                             {@see \Rasuvaeff\JsonLd\JsonLd::flatten()}
      */
-    public function __construct(array $expanded)
+    public function __construct(array $nodes)
     {
-        $nodes = [];
+        $list = [];
         $byId = [];
 
-        foreach ($expanded as $entry) {
+        foreach ($nodes as $entry) {
             if (array_is_list($entry)) {
                 continue;
             }
 
             $node = new Node($entry, $this);
-            $nodes[] = $node;
+            $list[] = $node;
 
             $id = $node->id();
 
@@ -41,12 +43,12 @@ final readonly class Graph
             }
         }
 
-        $this->nodes = $nodes;
+        $this->nodes = $list;
         $this->byId = $byId;
     }
 
     /**
-     * @return list<Node>
+     * @return list<Node> every node of the graph, referenced-only ones (just an `@id`) included
      */
     public function nodes(): array
     {

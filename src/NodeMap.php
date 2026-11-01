@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Rasuvaeff\JsonLd;
 
+use Rasuvaeff\JsonLd\Exception\ErrorCode;
 use Rasuvaeff\JsonLd\Exception\InvalidInputException;
 
 /**
@@ -159,7 +160,7 @@ final class NodeMap
             $existing = $this->graphs[$activeGraph][$id][Keywords::INDEX] ?? null;
 
             if ($existing !== null && $existing !== $element[Keywords::INDEX]) {
-                throw new InvalidInputException('conflicting indexes');
+                throw new InvalidInputException(ErrorCode::ConflictingIndexes);
             }
 
             $this->graphs[$activeGraph][$id][Keywords::INDEX] = $element[Keywords::INDEX];

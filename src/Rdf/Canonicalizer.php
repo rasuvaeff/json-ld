@@ -4,164 +4,49 @@ declare(strict_types=1);
 
 namespace Rasuvaeff\JsonLd\Rdf;
 
+use InvalidArgumentException;
+use Rasuvaeff\JsonLd\Exception\CanonicalizationLimitException;
+
 /**
- * Computes a canonical text form of a dataset in which blank node labels
- * are replaced by labels derived from the structure of the graph, so that
- * two datasets have the same text exactly when they are isomorphic (equal
- * up to renaming of blank nodes).
+ * W3C RDF Dataset Canonicalization (RDFC-1.0): relabels blank nodes so that
+ * two datasets have the same canonical N-Quads exactly when they are
+ * isomorphic.
  *
- * Colour refinement splits the blank nodes by their neighbourhood; classes
- * that stay tied (symmetric nodes) are broken by trying each member and
- * keeping the smallest result.
+ * Some datasets ("poison graphs", RDFC-1.0 section 4.4.1) need factorial
+ * work. With `n` blank nodes that share their first-degree hash with
+ * another one, Hash N-Degree Quads may run at most `$workFactor × n` times
+ * for each blank node, which bounds the whole run to `$workFactor × n²`
+ * calls; past that the canonicalizer gives up with a
+ * {@see CanonicalizationLimitException}. Symmetric but legitimate shapes
+ * (a cycle, a list of equal values) need about `n` calls per blank node.
  *
- * @internal
+ * @api
  */
-final class Canonicalizer
+final readonly class Canonicalizer
 {
-    public static function canonicalize(Dataset $dataset): string
-    {
-        $labels = [];
-        $rows = [];
-
-        foreach ($dataset->quads as $quad) {
-            $row = [$quad->subject, $quad->predicate, $quad->object, $quad->graph];
-            $rows[] = $row;
-
-            foreach ($row as $term) {
-                if ($term instanceof BlankNode) {
-                    $labels[$term->id] = '';
-                }
-            }
-        }
-
-        $colors = array_fill_keys(array_keys($labels), '');
-
-        return self::resolve($rows, $colors);
-    }
+    public const int DEFAULT_WORK_FACTOR = 4;
 
     /**
-     * @param list<array{0: Iri|BlankNode, 1: Iri, 2: Iri|BlankNode|Literal, 3: Iri|BlankNode|null}> $rows
-     * @param array<string, string> $colors
-     */
-    private static function resolve(array $rows, array $colors): string
-    {
-        $colors = self::refine($rows, $colors);
-
-        $classes = [];
-
-        foreach ($colors as $label => $color) {
-            $classes[$color][] = strval($label);
-        }
-
-        $tied = array_filter($classes, static fn(array $members): bool => count($members) > 1);
-
-        if ($tied === []) {
-            $ordered = array_keys($classes);
-            sort($ordered, SORT_STRING);
-            $names = [];
-
-            foreach ($ordered as $position => $color) {
-                $names[$classes[$color][0]] = 'c' . $position;
-            }
-
-            return self::serialize($rows, $names);
-        }
-
-        ksort($tied, SORT_STRING);
-        uasort($tied, static fn(array $left, array $right): int => count($left) <=> count($right));
-        $members = $tied[array_key_first($tied)];
-
-        $candidates = [];
-
-        foreach ($members as $member) {
-            $branch = $colors;
-            $branch[$member] = hash('sha256', $colors[$member] . '|individualized');
-            $candidates[] = self::resolve($rows, $branch);
-        }
-
-        sort($candidates, SORT_STRING);
-
-        return $candidates[0];
-    }
-
-    /**
-     * @param list<array{0: Iri|BlankNode, 1: Iri, 2: Iri|BlankNode|Literal, 3: Iri|BlankNode|null}> $rows
-     * @param array<string, string> $colors
+     * @param HashAlgorithm $hashAlgorithm the hash function of the algorithm and of {@see CanonicalForm::hash()}
+     * @param int $workFactor multiple of the number of non-unique blank nodes that one blank node may spend
+     *                        in Hash N-Degree Quads
      *
-     * @return array<string, string>
+     * @throws InvalidArgumentException when the limit is not positive
      */
-    private static function refine(array $rows, array $colors): array
-    {
-        $classCount = count(array_unique($colors));
-        $counter = count($colors);
-
-        for ($round = 0; $round <= $counter; $round++) {
-            $signatures = array_fill_keys(array_keys($colors), []);
-
-            foreach ($rows as $row) {
-                foreach ($row as $position => $term) {
-                    if (!$term instanceof BlankNode) {
-                        continue;
-                    }
-
-                    $parts = [];
-
-                    foreach ($row as $otherPosition => $other) {
-                        $parts[] = $other instanceof BlankNode
-                            ? ($otherPosition === $position ? 'self' : $colors[$other->id])
-                            : ($other === null ? '' : NQuads::formatTerm($other));
-                    }
-
-                    $signatures[$term->id][] = $position . '|' . implode('|', $parts);
-                }
-            }
-
-            $next = [];
-
-            foreach ($signatures as $label => $lines) {
-                sort($lines, SORT_STRING);
-                $next[$label] = hash('sha256', $colors[$label] . "\n" . implode("\n", $lines));
-            }
-
-            $count = count(array_unique($next));
-            $colors = $next;
-
-            if ($count === $classCount) {
-                break;
-            }
-
-            $classCount = $count;
+    public function __construct(
+        private HashAlgorithm $hashAlgorithm = HashAlgorithm::Sha256,
+        private int $workFactor = self::DEFAULT_WORK_FACTOR,
+    ) {
+        if ($workFactor < 1) {
+            throw new InvalidArgumentException(sprintf('Work factor must be positive, %d given', $workFactor));
         }
-
-        return $colors;
     }
 
     /**
-     * @param list<array{0: Iri|BlankNode, 1: Iri, 2: Iri|BlankNode|Literal, 3: Iri|BlankNode|null}> $rows
-     * @param array<string, string> $names
+     * @throws CanonicalizationLimitException when the dataset needs more work than the limit allows
      */
-    private static function serialize(array $rows, array $names): string
+    public function canonicalize(Dataset $dataset): CanonicalForm
     {
-        $lines = [];
-
-        foreach ($rows as $row) {
-            $parts = [];
-
-            foreach ($row as $term) {
-                if ($term === null) {
-                    $parts[] = '';
-                } elseif ($term instanceof BlankNode) {
-                    $parts[] = '_:' . $names[$term->id];
-                } else {
-                    $parts[] = NQuads::formatTerm($term);
-                }
-            }
-
-            $lines[] = implode(' ', $parts);
-        }
-
-        sort($lines, SORT_STRING);
-
-        return implode("\n", array_unique($lines));
+        return (new CanonicalizationRun($this->hashAlgorithm, $this->workFactor))->canonicalize($dataset);
     }
 }

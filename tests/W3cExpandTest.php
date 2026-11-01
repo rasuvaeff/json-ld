@@ -4,12 +4,13 @@ declare(strict_types=1);
 
 namespace Rasuvaeff\JsonLd\Tests;
 
+use Rasuvaeff\JsonLd\DocumentExpansion;
 use Rasuvaeff\JsonLd\Exception\JsonLdException;
 use Rasuvaeff\JsonLd\Expander;
-use Rasuvaeff\JsonLd\ExpandOptions;
 use Rasuvaeff\JsonLd\Json;
 use Rasuvaeff\JsonLd\JsonLd;
 use Rasuvaeff\JsonLd\Keywords;
+use Rasuvaeff\JsonLd\ProcessingOptions;
 use Rasuvaeff\JsonLd\Tests\Support\FixtureContextLoader;
 use Rasuvaeff\JsonLd\Tests\Support\W3cManifest;
 use Testo\Assert;
@@ -19,6 +20,7 @@ use Testo\Test;
 
 #[Test]
 #[Covers(Expander::class)]
+#[Covers(DocumentExpansion::class)]
 final class W3cExpandTest
 {
     /**
@@ -32,11 +34,11 @@ final class W3cExpandTest
     #[DataProvider('suiteProvider')]
     public function case(string $name, mixed $input, mixed $expected, ?string $expectedError, ?string $base, mixed $expandContext, ?string $documentUrl = null): void
     {
-        $options = new ExpandOptions(
+        $options = new ProcessingOptions(
             base: $base,
+            documentUrl: $documentUrl,
             expandContext: $expandContext,
             loader: new FixtureContextLoader(),
-            documentUrl: $documentUrl,
         );
 
         if ($expectedError !== null) {
@@ -45,7 +47,7 @@ final class W3cExpandTest
             try {
                 JsonLd::expand(is_string($input) ? $input : (array) $input, $options);
             } catch (JsonLdException $exception) {
-                $message = $exception->getMessage();
+                $message = $exception->errorCode()->value;
             }
 
             Assert::same($message, $expectedError);

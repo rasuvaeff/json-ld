@@ -24,6 +24,6 @@ final class NQuadsBench
         static $text = null;
         $text ??= JsonLd::serializeNQuads(JsonLd::toRdf(Documents::small()));
 
-        return count(JsonLd::parseNQuads($text)->quads());
+        return count(JsonLd::parseNQuads($text)->quads);
     }
 }

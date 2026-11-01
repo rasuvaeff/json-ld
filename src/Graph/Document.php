@@ -4,75 +4,51 @@ declare(strict_types=1);
 
 namespace Rasuvaeff\JsonLd\Graph;
 
+use Rasuvaeff\JsonLd\Exception\JsonLdException;
 use Rasuvaeff\JsonLd\Keywords;
+use Rasuvaeff\JsonLd\NodeMap;
 
 /**
- * A JSON-LD document in expanded form: the default graph plus the named
- * graphs found in `@graph` members.
+ * A JSON-LD document as a set of graphs: the default graph plus one graph
+ * per `@graph` with a name.
+ *
+ * The graphs come from the node map of the expanded document (JSON-LD 1.1
+ * API section 7.2), the same structure flattening uses: every node object
+ * of the document, embedded ones included, is a node of its graph, and
+ * embedded objects become references. Nodes without `@id` (an embedded
+ * schema.org `author`, say) get blank node labels `_:b0`, `_:b1`, … in the
+ * order the algorithm meets them; labels from the input are relabeled the
+ * same way. The labels are stable for the same input but are not the
+ * labels the input used. IRIs are kept as they are.
  *
  * @api
- *
- * @psalm-import-type JsonValue from \Rasuvaeff\JsonLd\Json
  */
 final readonly class Document
 {
-    public const string DEFAULT_GRAPH = '@default';
-
-    /** @var array<string, Graph> */
-    private array $graphs;
+    public const string DEFAULT_GRAPH = Keywords::DEFAULT_GRAPH;
 
     /**
-     * @param list<mixed> $expanded output of the expander
+     * @param array<string, Graph> $graphs
      */
-    public function __construct(array $expanded)
-    {
-        /** @var list<array<array-key, mixed>> $default */
-        $default = [];
-        /** @var array<string, list<array<array-key, mixed>>> $named */
-        $named = [];
-
-        foreach ($expanded as $entry) {
-            if (!is_array($entry) || array_is_list($entry)) {
-                continue;
-            }
-
-            /** @var JsonValue $graphEntries */
-            $graphEntries = $entry[Keywords::GRAPH] ?? null;
-            /** @var JsonValue $id */
-            $id = $entry[Keywords::ID] ?? null;
-
-            if ($graphEntries === null) {
-                $default[] = $entry;
-
-                continue;
-            }
-
-            $graphName = is_string($id) ? $id : self::DEFAULT_GRAPH;
-            $items = is_array($graphEntries) && array_is_list($graphEntries) ? $graphEntries : [$graphEntries];
-
-            /** @var JsonValue $item */
-            foreach ($items as $item) {
-                if (is_array($item) && !array_is_list($item) && !array_key_exists(Keywords::GRAPH, $item)) {
-                    $named[$graphName][] = $item;
-                }
-            }
-        }
-
-        $graphs = [self::DEFAULT_GRAPH => new Graph($default)];
-
-        foreach ($named as $name => $items) {
-            $graphs[$name] = new Graph($items);
-        }
-
-        $this->graphs = $graphs;
-    }
+    private function __construct(private array $graphs) {}
 
     /**
+     * Builds the document from the expanded form, for example the output of
+     * {@see \Rasuvaeff\JsonLd\JsonLd::expand()}.
+     *
      * @param list<mixed> $expanded
+     *
+     * @throws JsonLdException `conflicting indexes` when one node carries two different `@index` values
      */
     public static function fromExpanded(array $expanded): self
     {
-        return new self($expanded);
+        $graphs = [];
+
+        foreach (NodeMap::of($expanded)->graphs as $name => $nodes) {
+            $graphs[strval($name)] = new Graph($nodes);
+        }
+
+        return new self($graphs);
     }
 
     public function defaultGraph(): Graph
@@ -86,7 +62,7 @@ final readonly class Document
     }
 
     /**
-     * @return array<string, Graph>
+     * @return array<string, Graph> graph name => graph; the default graph is {@see self::DEFAULT_GRAPH}
      */
     public function graphs(): array
     {

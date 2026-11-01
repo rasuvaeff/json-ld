@@ -8,10 +8,26 @@
 [![PHP](https://img.shields.io/packagist/dependency-v/rasuvaeff/json-ld/php)](https://packagist.org/packages/rasuvaeff/json-ld)
 [![License](https://img.shields.io/badge/license-BSD--3--Clause-blue.svg)](LICENSE.md)
 
-Процессор JSON-LD 1.1 для PHP: expand, flatten, Node API, RDF и N-Quads.
+Процессор JSON-LD 1.1 для PHP: expand, flatten, Node API, конвертация в RDF, N-Quads
+и каноникализация RDF-датасетов W3C RDFC-1.0.
+
+Пакет **читает** JSON-LD: превращает документы в развёрнутую/плоскую форму, граф узлов
+или RDF. Это не генератор schema.org-разметки — чтобы выводить
+`<script type="application/ld+json">` на своих страницах, используйте
+[rasuvaeff/yii3-seo](https://github.com/rasuvaeff/yii3-seo).
 
 > Работаете с AI-ассистентом? [llms.txt](llms.txt) — компактный API-справочник,
 > который можно передать модели.
+
+## Объём
+
+| Поддержано (контракт 1.0) | Не реализовано |
+|---|---|
+| Expand, flatten, Node API (`Graph\Document`) | Compaction |
+| `toRdf` / `fromRdf`, N-Quads | Framing |
+| Каноникализация RDFC-1.0 (`Rdf\Canonicalizer`) | Режим обработки JSON-LD 1.0 |
+
+Compaction и framing в 1.0 не входят.
 
 ## Требования
 
@@ -28,46 +44,153 @@ composer require rasuvaeff/json-ld
 ## Использование
 
 ```php
-use Rasuvaeff\JsonLd\ExpandOptions;
 use Rasuvaeff\JsonLd\JsonLd;
+use Rasuvaeff\JsonLd\Loader\MapContextLoader;
+use Rasuvaeff\JsonLd\ProcessingOptions;
 
-$options = new ExpandOptions(base: 'https://example.com/page', loader: $loader);
+$options = new ProcessingOptions(
+    base: 'https://example.com/page',
+    loader: new MapContextLoader(['https://schema.org/' => ['@context' => ['@vocab' => 'https://schema.org/']]]),
+);
 
 $expanded = JsonLd::expand($document, $options);   // список node/value-объектов
 $flat     = JsonLd::flatten($document, $options);  // узлы по @id, blank-узлы _:b0, _:b1, ...
+$graph    = JsonLd::document($document, $options)->defaultGraph();
 $dataset  = JsonLd::toRdf($document, $options);    // Dataset из квадов
 $nquads   = JsonLd::serializeNQuads($dataset);
 $back     = JsonLd::fromRdf(JsonLd::parseNQuads($nquads));
+$hash     = $dataset->canonicalHash();             // SHA-256 канонических N-Quads по RDFC-1.0
 ```
 
-`$document` — декодированный массив или inline JSON-строка.
+`$document` — декодированный массив или JSON-строка: inline JSON (начинается с `{` или `[`)
+декодируется, любая другая строка — URL документа, который получает загрузчик.
+
+### Классы
 
 | Класс | Назначение |
 |---|---|
 | `JsonLd` | Фасад: `expand`, `flatten`, `document`, `toRdf`, `fromRdf`, `serializeNQuads`, `parseNQuads` |
-| `ExpandOptions` | `base`, `documentUrl`, `expandContext`, `loader` |
+| `ProcessingOptions` | `base`, `documentUrl`, `expandContext`, `loader`, `maxDepth` (по умолчанию 512), `maxBytes` (по умолчанию без лимита) |
+| `RdfDirection` | `rdfDirection` для `toRdf`/`fromRdf`: `I18nDatatype`, `CompoundLiteral` |
 | `Expander`, `Flattener` | Алгоритмы за фасадом |
 | `Iri` | Разбор по RFC 3986 и разрешение относительных ссылок |
-| `Loader\ContextLoaderInterface` | Как загружаются удалённые контексты; `InlineContextLoader` (по умолчанию, без I/O), `PsrContextLoader` (PSR-18, политика URL, лимит размера) |
-| `Graph\Document`, `Graph`, `Node` | Node API поверх развёрнутой формы |
-| `Rdf\Dataset`, `Quad`, `Iri`, `BlankNode`, `Literal`, `NQuads` | RDF-модель; `Dataset::equals()` сравнивает с точностью до переименования blank-узлов |
-| `Exception\*` | Сообщение каждого исключения — код ошибки W3C (`invalid @id value`, ...) |
+| `Loader\ContextLoaderInterface`, `LoadedContext` | Как загружаются удалённые контексты и документы |
+| `Loader\InlineContextLoader` | По умолчанию: разбирает inline JSON, отвергает любой URL, без I/O |
+| `Loader\MapContextLoader` | Фиксированная карта URL → декодированный документ, точное совпадение, без I/O |
+| `Loader\PsrContextLoader` | PSR-18 клиент, политика URL, лимит размера тела |
+| `Graph\Document`, `Graph`, `Node`, `Value` | Node API (ниже) |
+| `Rdf\Dataset`, `Quad`, `Iri`, `BlankNode`, `Literal`, `NQuads` | RDF-модель и N-Quads |
+| `Rdf\Vocabulary` | IRI терминов RDF/XSD (`RDF_TYPE`, `XSD_STRING`, `RDF_LANGSTRING`, ...) |
+| `Rdf\Canonicalizer`, `CanonicalForm`, `HashAlgorithm` | RDFC-1.0 (ниже) |
+| `Exception\JsonLdException`, `ErrorCode` | Ошибки (ниже) |
 
-Поддержано: expand, flatten, конвертация в RDF (`toRdf`/`fromRdf`, native types,
-`rdfDirection` `i18n-datatype` и `compound-literal`, JSON-литералы через JCS),
-scoped-контексты, `@protected`, `@import`, `@propagate`, `@nest`, `@included`, все
-типы контейнеров. Не реализовано: compaction, framing, режим обработки 1.0.
+### Node API
+
+`JsonLd::document()` строит графы из node map — той же структуры, что и flatten, — поэтому
+каждый node-объект документа, включая вложенные, становится узлом своего графа, а
+вложенные объекты превращаются в ссылки:
+
+```php
+$article = $graph->node('https://example.com/articles/1');
+$author  = $article?->reference('https://schema.org/author');   // вложенный, без @id: всё равно достижим
+$author?->id();                                                 // "_:b0"
+$author?->value('https://schema.org/name');                     // "Alice"
+
+foreach ($node->valueObjects('https://schema.org/name') as $name) {
+    $name->value; $name->language; $name->type; $name->direction;
+}
+```
+
+- Узлы без `@id` получают метки blank-узлов `_:b0`, `_:b1`, … в порядке обхода
+  алгоритма; метки blank-узлов из входа переименовываются так же. Для одного и того же
+  входа метки стабильны, но это не метки входа. IRI сохраняются.
+- Узлы идут в порядке документа. Голая ссылка (`{"@id": "…"}`, которую ничто не описывает)
+  — узел без свойств, поэтому `reference()` её разрешает.
+- `Node`: `id()`, `types()`, `hasType()`, `properties()`, `values()` (скаляры),
+  `value()`, `valueObjects()` (`Graph\Value` с языком, типом данных и направлением),
+  `references()`, `reference()`, `toArray()` (плоский node-объект).
+- `Graph`: `nodes()`, `node($id)`, `byType($iri)`; `Document`: `defaultGraph()`,
+  `graph($name)`, `graphs()`, `Document::fromExpanded($expanded)`.
+
+### Каноникализация RDF-датасетов
+
+`Rdf\Canonicalizer` реализует [RDFC-1.0](https://www.w3.org/TR/rdf-canon/): у двух
+датасетов одинаковые канонические N-Quads ровно тогда, когда они изоморфны.
+
+```php
+use Rasuvaeff\JsonLd\Rdf\Canonicalizer;
+use Rasuvaeff\JsonLd\Rdf\HashAlgorithm;
+
+$dataset->canonicalNQuads();   // отсортированные канонические N-Quads, blank-узлы _:c14n0, _:c14n1, ...
+$dataset->canonicalHash();     // hex SHA-256 от canonicalNQuads()
+$dataset->equals($other);      // изоморфизм: одинаковые канонические N-Quads
+
+$form = (new Canonicalizer(hashAlgorithm: HashAlgorithm::Sha384, workFactor: 4))->canonicalize($dataset);
+$form->nquads;                 // канонические N-Quads
+$form->issuedIdentifiers;      // ['_:e0' => '_:c14n0', ...] метка входа => каноническая метка
+$form->hash();                 // дайджест тем же алгоритмом
+```
+
+**Poison-графы.** Некоторым датасетам (клики blank-узлов) нужна факториальная работа.
+Если у `n` blank-узлов совпадает first-degree хеш, Hash N-Degree Quads может выполниться
+не больше `workFactor × n` раз на blank-узел (по умолчанию `workFactor` 4), что ограничивает
+прогон `workFactor × n²` вызовами; дальше бросается
+`Exception\CanonicalizationLimitException` (код `canonicalization limit exceeded`).
+Легитимным симметричным формам — циклу, списку одинаковых значений — нужно около `n`
+вызовов на blank-узел. `canonicalNQuads()`, `canonicalHash()` и `equals()` тоже могут его
+бросить.
+
+**Известное ограничение RDFC-1.0 в нынешней редакции.** Hash Related Blank Node не учитывает
+имя графа связи. Если два blank-узла отличаются только тем, *в каком графе* лежат их связи
+(`_:a p _:x` в `<g>` и `_:a p _:y` в графе по умолчанию, у `_:b` наоборот), их хеши
+совпадают, и спецификация разрешает ничью порядком входа: тот же датасет в другом порядке
+квадов может получить другую, столь же корректную каноническую форму, и `equals()` вернёт
+`false`. Метки blank-узлов на результат не влияют; на датасетах без именованных графов
+эффекта не было ни в одном из 180 000 сгенерированных порядков.
+
+### Ошибки
+
+Все исключения наследуют `Exception\JsonLdException`; `errorCode()` возвращает
+`Exception\ErrorCode` — это контракт, по которому ветвиться. Сообщение — для людей: оно
+равно коду ошибки, если процессору нечего добавить (отказ загрузчика, синтаксическая
+ошибка JSON).
+
+| Исключение | Коды ошибок |
+|---|---|
+| `InvalidContextException` | коды W3C для контекстов: `invalid term definition`, `invalid remote context`, … |
+| `InvalidInputException` | коды W3C для документа (`invalid @id value`, …); `document nested too deeply`, `document too large` |
+| `ContextRecursionException` | `context overflow`, `recursive context inclusion` |
+| `DocumentLoadingException` | `loading remote context failed`, `loading document failed` |
+| `InvalidJsonException` | `loading document failed` (inline JSON, который не JSON или не объект/массив) |
+| `InvalidNQuadsException` | `invalid N-Quads` |
+| `CanonicalizationLimitException` | `canonicalization limit exceeded` |
+
+Четыре кода — собственные коды процессора: `document nested too deeply`, `document too large`,
+`invalid N-Quads`, `canonicalization limit exceeded`. `recursive context inclusion` — код
+JSON-LD 1.0, который всё ещё ожидает тестовый набор W3C; все остальные — коды ошибок
+W3C JSON-LD 1.1 API.
+
+**Что бы ни бросил загрузчик** — `DocumentLoadingException`, исключение PSR-18, любой
+`Throwable`, — вызывающий получает `DocumentLoadingException`: `loading remote context
+failed` для контекста, `loading document failed` для самого документа, исключение
+загрузчика — в `getPrevious()`. Одно исключение — из самого алгоритма W3C: scoped-контекст
+определения термина, который не удалось загрузить, сообщается как `invalid scoped context`
+(`InvalidContextException`), а `DocumentLoadingException` — в его `getPrevious()`.
 
 ## Безопасность
 
 - **Никакого неявного I/O.** Загрузчик по умолчанию не обращается ни к сети, ни к файловой
   системе: удалённый `@context` завершается `loading remote context failed`, пока вы не
-  передали `ContextLoaderInterface`.
+  передали `ContextLoaderInterface`. Для известных контекстов лучше `MapContextLoader`.
 - `PsrContextLoader` принимает необязательную политику URL (`Closure(string): bool`) и лимит
   размера тела (по умолчанию 1 МиБ). Документы недоверенные: белый список хостов, запрет
   приватных диапазонов, таймауты на PSR-18 клиенте.
-- Глубина разбора ограничена 512 уровнями, цепочка удалённых контекстов — 64. Размер
-  исходного документа ограничивайте сами до декодирования.
+- **Недоверенные JSON-строки.** `ProcessingOptions(maxBytes: …)` ограничивает длину inline
+  JSON-строки до декодирования (`document too large`); `maxDepth` (по умолчанию 512)
+  ограничивает вложенность и при декодировании строки, и при expand
+  (`document nested too deeply`). Цепочка удалённых контекстов обрывается на 64
+  (`context overflow`).
+- **RDFC-1.0** ограничен work factor (см. выше).
 
 ## Примеры
 
@@ -77,9 +200,10 @@ scoped-контексты, `@protected`, `@import`, `@propagate`, `@nest`, `@inc
 |---|---|
 | [`expand_article.php`](examples/expand_article.php) | expand schema.org Article/VideoObject с `@graph` |
 | [`context_features.php`](examples/context_features.php) | префиксы, `@vocab`, алиасы ключевых слов, `@container` |
-| [`loaders.php`](examples/loaders.php) | загрузчик по умолчанию отвергает URL; подмена загрузчика; ошибка неизвестного контекста |
-| [`flatten_node_api.php`](examples/flatten_node_api.php) | `flatten` и Node API на одном документе |
+| [`loaders.php`](examples/loaders.php) | загрузчик по умолчанию отвергает URL; `MapContextLoader`; коды ошибок; лимиты входа |
+| [`flatten_node_api.php`](examples/flatten_node_api.php) | `flatten`, Node API, вложенные узлы, значения с языком |
 | [`rdf.php`](examples/rdf.php) | `toRdf`, N-Quads, обратно через `fromRdf` |
+| [`canonicalize.php`](examples/canonicalize.php) | RDFC-1.0: канонические N-Quads, хеши, выданные метки, лимит poison-графов |
 | [`html_script.php`](examples/html_script.php) | извлечение блоков `application/ld+json` со страницы |
 
 Примеры обязаны выполняться без фатальных ошибок и соответствовать
@@ -92,11 +216,15 @@ scoped-контексты, `@protected`, `@import`, `@propagate`, `@nest`, `@inc
 
 ## Соответствие спецификации
 
-Тестовый набор W3C JSON-LD API (expand, flatten, toRdf, fromRdf) лежит в
-`tests/fixtures/w3c` и проходит целиком, кроме тестов режима обработки 1.0 и одного
-случая, которому нужна compaction. Тестовые данные принадлежат W3C и используются по
-[лицензии W3C Test Suite и 3-clause BSD](tests/fixtures/w3c/LICENSE.md)
-(Copyright W3C and the JSON-LD Working Group).
+- Тестовый набор W3C JSON-LD API (expand, flatten, toRdf, fromRdf) лежит в
+  `tests/fixtures/w3c` и проходит целиком, кроме тестов режима обработки 1.0 и одного
+  случая, которому нужна compaction. Тестовые данные принадлежат W3C и используются по
+  [лицензии W3C Test Suite и 3-clause BSD](tests/fixtures/w3c/LICENSE.md)
+  (Copyright W3C and the JSON-LD Working Group).
+- Тестовый набор W3C RDF Dataset Canonicalization лежит в `tests/fixtures/rdf-canon` и
+  проходит целиком: 64 evaluation-теста (SHA-256 и SHA-384), 21 тест карты выданных меток
+  и негативный тест poison-графа — 86 из 86, без пропусков
+  ([лицензия](tests/fixtures/rdf-canon/LICENSE.md), Copyright W3C).
 
 ## Разработка
 

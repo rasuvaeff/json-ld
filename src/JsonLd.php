@@ -15,8 +15,10 @@ use Rasuvaeff\JsonLd\Rdf\ToRdf;
  * and RDF conversion.
  *
  * Every operation performs I/O only through the loader given in
- * {@see ExpandOptions}; the default loader parses inline JSON and never
- * touches the network or the filesystem.
+ * {@see ProcessingOptions}; the default loader parses inline JSON and never
+ * touches the network or the filesystem. Failures are
+ * {@see Exception\JsonLdException}s; {@see Exception\JsonLdException::errorCode()}
+ * tells them apart.
  *
  * @api
  */
@@ -29,31 +31,35 @@ final class JsonLd
      *
      * @return list<mixed> the expanded form
      */
-    public static function expand(string|array $input, ?ExpandOptions $options = null): array
+    public static function expand(string|array $input, ?ProcessingOptions $options = null): array
     {
         return (new Expander())->expand($input, $options);
     }
 
     /**
-     * Flattens a JSON-LD document into a single node object with `@graph`.
+     * Flattens a JSON-LD document: every node of the default graph, embedded
+     * nodes replaced by references; named graphs are `@graph` members of
+     * their graph node.
      *
      * @param string|array<mixed> $input
      *
      * @return list<array<string, mixed>>
      */
-    public static function flatten(string|array $input, ?ExpandOptions $options = null): array
+    public static function flatten(string|array $input, ?ProcessingOptions $options = null): array
     {
         return (new Flattener())->flatten($input, $options);
     }
 
     /**
-     * Expands a document and exposes it through the node API.
+     * Exposes a document through the node API. Embedded nodes are nodes of
+     * their graph; the ones without `@id` get blank node labels
+     * (see {@see Document}).
      *
      * @param string|array<mixed> $input
      */
-    public static function document(string|array $input, ?ExpandOptions $options = null): Document
+    public static function document(string|array $input, ?ProcessingOptions $options = null): Document
     {
-        return Document::fromExpanded(self::expand($input, $options));
+        return Document::fromExpanded(DocumentExpansion::run($input, $options));
     }
 
     /**
@@ -63,9 +69,9 @@ final class JsonLd
      */
     public static function toRdf(
         string|array $input,
-        ?ExpandOptions $options = null,
+        ?ProcessingOptions $options = null,
         bool $produceGeneralizedRdf = false,
-        ?string $rdfDirection = null,
+        ?RdfDirection $rdfDirection = null,
     ): Dataset {
         return (new ToRdf(produceGeneralizedRdf: $produceGeneralizedRdf, rdfDirection: $rdfDirection))->toRdf($input, $options);
     }
@@ -79,7 +85,7 @@ final class JsonLd
         Dataset $dataset,
         bool $useNativeTypes = false,
         bool $useRdfType = false,
-        ?string $rdfDirection = null,
+        ?RdfDirection $rdfDirection = null,
     ): array {
         return (new FromRdf(useNativeTypes: $useNativeTypes, useRdfType: $useRdfType, rdfDirection: $rdfDirection))->fromRdf($dataset);
     }

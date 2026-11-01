@@ -4,11 +4,12 @@ declare(strict_types=1);
 
 namespace Rasuvaeff\JsonLd\Tests;
 
+use Rasuvaeff\JsonLd\DocumentExpansion;
 use Rasuvaeff\JsonLd\Exception\DocumentLoadingException;
 use Rasuvaeff\JsonLd\Exception\InvalidJsonException;
 use Rasuvaeff\JsonLd\Expander;
-use Rasuvaeff\JsonLd\ExpandOptions;
 use Rasuvaeff\JsonLd\JsonLd;
+use Rasuvaeff\JsonLd\ProcessingOptions;
 use Rasuvaeff\JsonLd\Tests\Support\RecordingContextLoader;
 use Testo\Assert;
 use Testo\Codecov\Covers;
@@ -16,6 +17,7 @@ use Testo\Test;
 
 #[Test]
 #[Covers(Expander::class)]
+#[Covers(DocumentExpansion::class)]
 final class ExpanderInputTest
 {
     public function decodesInlineJsonAfterLeadingWhitespace(): void
@@ -32,7 +34,7 @@ final class ExpanderInputTest
     {
         foreach (['{"http://s/p": "x"}', "  \n{\"http://s/p\": \"x\"}", '[{"http://s/p": "x"}]', "\t[{\"http://s/p\": \"x\"}]"] as $input) {
             $loader = new RecordingContextLoader();
-            $expanded = JsonLd::expand($input, new ExpandOptions(loader: $loader));
+            $expanded = JsonLd::expand($input, new ProcessingOptions(loader: $loader));
 
             Assert::same($loader->requested, []);
             Assert::same($expanded, [['http://s/p' => [['@value' => 'x']]]]);
@@ -72,13 +74,13 @@ final class ExpanderInputTest
         $document = ['@context' => 'ctx.json', 'http://s/p' => 'v'];
 
         $both = new RecordingContextLoader();
-        JsonLd::expand($document, new ExpandOptions(base: 'http://base/x/', loader: $both, documentUrl: 'http://doc/y/'));
+        JsonLd::expand($document, new ProcessingOptions(base: 'http://base/x/', documentUrl: 'http://doc/y/', loader: $both));
 
         $baseOnly = new RecordingContextLoader();
-        JsonLd::expand($document, new ExpandOptions(base: 'http://base/x/', loader: $baseOnly));
+        JsonLd::expand($document, new ProcessingOptions(base: 'http://base/x/', loader: $baseOnly));
 
         $documentOnly = new RecordingContextLoader();
-        JsonLd::expand($document, new ExpandOptions(loader: $documentOnly, documentUrl: 'http://doc/y/'));
+        JsonLd::expand($document, new ProcessingOptions(documentUrl: 'http://doc/y/', loader: $documentOnly));
 
         Assert::same($both->requested, ['http://doc/y/ctx.json']);
         Assert::same($baseOnly->requested, ['http://base/x/ctx.json']);
@@ -90,7 +92,7 @@ final class ExpanderInputTest
         $loader = new RecordingContextLoader();
         JsonLd::expand(
             ['http://s/p' => 'v'],
-            new ExpandOptions(base: 'http://base/x/', expandContext: 'ctx.json', loader: $loader, documentUrl: 'http://doc/y/'),
+            new ProcessingOptions(base: 'http://base/x/', documentUrl: 'http://doc/y/', expandContext: 'ctx.json', loader: $loader),
         );
 
         Assert::same($loader->requested, ['http://doc/y/ctx.json']);
@@ -101,10 +103,10 @@ final class ExpanderInputTest
         $document = ['n' => 'x'];
         $expected = [['http://s/name' => [['@value' => 'x']]]];
 
-        $bare = new ExpandOptions(expandContext: ['n' => 'http://s/name']);
-        $wrapped = new ExpandOptions(expandContext: ['@context' => ['n' => 'http://s/name']]);
-        $listed = new ExpandOptions(expandContext: [['n' => 'http://s/name']]);
-        $inline = new ExpandOptions(expandContext: '{"@context": {"n": "http://s/name"}}');
+        $bare = new ProcessingOptions(expandContext: ['n' => 'http://s/name']);
+        $wrapped = new ProcessingOptions(expandContext: ['@context' => ['n' => 'http://s/name']]);
+        $listed = new ProcessingOptions(expandContext: [['n' => 'http://s/name']]);
+        $inline = new ProcessingOptions(expandContext: '{"@context": {"n": "http://s/name"}}');
 
         Assert::same(JsonLd::expand($document, $bare), $expected);
         Assert::same(JsonLd::expand($document, $wrapped), $expected);

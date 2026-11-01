@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Rasuvaeff\JsonLd\Tests;
 
-use Rasuvaeff\JsonLd\Exception\InvalidContextException;
+use Rasuvaeff\JsonLd\Exception\DocumentLoadingException;
+use Rasuvaeff\JsonLd\Exception\ErrorCode;
 use Rasuvaeff\JsonLd\Expander;
 use Rasuvaeff\JsonLd\JsonLd;
 use Testo\Assert;
@@ -28,11 +29,11 @@ final class InlineInputTest
 
         try {
             JsonLd::expand(['@context' => 'https://example.com/ctx', 'http://s/p' => 'v']);
-        } catch (InvalidContextException $exception) {
-            $message = $exception->getMessage();
+        } catch (DocumentLoadingException $exception) {
+            $message = $exception->errorCode();
         }
 
-        Assert::same($message, 'loading remote context failed');
+        Assert::same($message, ErrorCode::LoadingRemoteContextFailed);
     }
 
     public function deepNestingIsRejected(): void

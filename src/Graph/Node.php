@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Rasuvaeff\JsonLd\Graph;
 
 /**
- * A node of a JSON-LD graph: an immutable view over one expanded node
- * object, with accessors for values and references to other nodes.
+ * A node of a JSON-LD graph: an immutable view over one node object in
+ * flattened form, with accessors for values and references to other nodes.
  *
  * @api
  *
@@ -15,7 +15,8 @@ namespace Rasuvaeff\JsonLd\Graph;
 final readonly class Node
 {
     /**
-     * @param array<array-key, mixed> $expanded the expanded node object
+     * @param array<array-key, mixed> $expanded the node object in flattened form: expanded, embedded nodes
+     *                                        replaced by `{"@id": …}` references
      * @param Graph $graph the graph the node belongs to, for reference resolution
      */
     public function __construct(
@@ -72,13 +73,12 @@ final readonly class Node
         /** @var array<string, list<mixed>> $result */
         $result = [];
 
-        /** @var JsonValue $value */
-        foreach ($this->expanded as $key => $value) {
+        foreach (array_keys($this->expanded) as $key) {
             if ($key === '@id' || $key === '@type') {
                 continue;
             }
 
-            $result[strval($key)] = is_array($value) && array_is_list($value) ? $value : [$value];
+            $result[strval($key)] = $this->items(strval($key));
         }
 
         return $result;
@@ -95,7 +95,7 @@ final readonly class Node
         $result = [];
 
         /** @var JsonValue $value */
-        foreach ($this->expanded[$property] ?? [] as $value) {
+        foreach ($this->items($property) as $value) {
             if (is_array($value) && !array_is_list($value) && array_key_exists('@value', $value)) {
                 /** @var JsonValue $inner */
                 $inner = $value['@value'];
@@ -105,6 +105,39 @@ final readonly class Node
                 }
             } elseif (is_scalar($value)) {
                 $result[] = $value;
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * Value objects of a property with their language, datatype and
+     * direction; values that are not scalars (`@json` objects and arrays)
+     * and node references are skipped.
+     *
+     * @return list<Value>
+     */
+    public function valueObjects(string $property): array
+    {
+        $result = [];
+
+        /** @var JsonValue $value */
+        foreach ($this->items($property) as $value) {
+            if (!is_array($value) || array_is_list($value) || !array_key_exists('@value', $value)) {
+                continue;
+            }
+
+            /** @var JsonValue $inner */
+            $inner = $value['@value'];
+
+            if (is_scalar($inner)) {
+                $result[] = new Value(
+                    value: $inner,
+                    language: $this->stringOrNull($value['@language'] ?? null),
+                    type: $this->stringOrNull($value['@type'] ?? null),
+                    direction: $this->stringOrNull($value['@direction'] ?? null),
+                );
             }
         }
 
@@ -130,11 +163,11 @@ final readonly class Node
         $result = [];
 
         /** @var JsonValue $value */
-        foreach ($this->expanded[$property] ?? [] as $value) {
+        foreach ($this->items($property) as $value) {
             if (is_array($value) && !array_is_list($value) && isset($value['@id']) && is_string($value['@id'])) {
                 $node = $this->graph->node($value['@id']);
 
-                if ($node instanceof \Rasuvaeff\JsonLd\Graph\Node) {
+                if ($node instanceof self) {
                     $result[] = $node;
                 }
             }
@@ -149,7 +182,7 @@ final readonly class Node
     }
 
     /**
-     * The raw expanded node object this view wraps.
+     * The node object this view wraps, in flattened form.
      *
      * @return array<string, mixed>
      */
@@ -159,5 +192,24 @@ final readonly class Node
         $expanded = $this->expanded;
 
         return $expanded;
+    }
+
+    private function stringOrNull(mixed $value): ?string
+    {
+        return is_string($value) ? $value : null;
+    }
+
+    /**
+     * The values of a member as a list: `@index` and other single values
+     * are wrapped.
+     *
+     * @return list<mixed>
+     */
+    private function items(string $property): array
+    {
+        /** @var JsonValue $value */
+        $value = $this->expanded[$property] ?? [];
+
+        return is_array($value) && array_is_list($value) ? $value : [$value];
     }
 }

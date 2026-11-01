@@ -12,7 +12,8 @@ use Rasuvaeff\JsonLd\Rdf\FromRdf;
 use Rasuvaeff\JsonLd\Rdf\Iri;
 use Rasuvaeff\JsonLd\Rdf\Literal;
 use Rasuvaeff\JsonLd\Rdf\Quad;
-use Rasuvaeff\JsonLd\Rdf\ToRdf;
+use Rasuvaeff\JsonLd\Rdf\Vocabulary;
+use Rasuvaeff\JsonLd\RdfDirection;
 use Rasuvaeff\JsonLd\Tests\Support\Strict;
 use Testo\Assert;
 use Testo\Codecov\Covers;
@@ -35,13 +36,13 @@ final class FromRdfDetailsTest
     {
         $dataset = new Dataset([
             $this->quad('http://s', 'http://p', '_:b'),
-            $this->quad('_:b', self::RDF . 'value', new Literal('v', Literal::XSD_STRING)),
-            $this->quad('_:b', self::RDF . 'language', new Literal('en', Literal::XSD_STRING)),
-            $this->quad('_:b', self::RDF . 'direction', new Literal('rtl', Literal::XSD_STRING)),
+            $this->quad('_:b', self::RDF . 'value', new Literal('v', Vocabulary::XSD_STRING)),
+            $this->quad('_:b', self::RDF . 'language', new Literal('en', Vocabulary::XSD_STRING)),
+            $this->quad('_:b', self::RDF . 'direction', new Literal('rtl', Vocabulary::XSD_STRING)),
         ]);
 
         Assert::same(
-            JsonLd::fromRdf($dataset, rdfDirection: 'compound-literal'),
+            JsonLd::fromRdf($dataset, rdfDirection: RdfDirection::CompoundLiteral),
             [['@id' => 'http://s', 'http://p' => [['@value' => 'v', '@language' => 'en', '@direction' => 'rtl']]]],
         );
     }
@@ -50,18 +51,18 @@ final class FromRdfDetailsTest
     {
         $dataset = new Dataset([
             $this->quad('http://s', 'http://p', '_:b'),
-            $this->quad('_:b', self::RDF . 'direction', new Literal('ltr', Literal::XSD_STRING)),
+            $this->quad('_:b', self::RDF . 'direction', new Literal('ltr', Vocabulary::XSD_STRING)),
         ]);
 
         Assert::same(
-            JsonLd::fromRdf($dataset, rdfDirection: 'compound-literal'),
+            JsonLd::fromRdf($dataset, rdfDirection: RdfDirection::CompoundLiteral),
             [['@id' => 'http://s', 'http://p' => [['@value' => null, '@direction' => 'ltr']]]],
         );
     }
 
     public function keepsCompoundNodesThatAreUsedTwiceOrAreNotBlank(): void
     {
-        $direction = new Literal('ltr', Literal::XSD_STRING);
+        $direction = new Literal('ltr', Vocabulary::XSD_STRING);
 
         $twice = JsonLd::fromRdf(
             new Dataset([
@@ -69,7 +70,7 @@ final class FromRdfDetailsTest
                 $this->quad('http://s', 'http://q', '_:b'),
                 $this->quad('_:b', self::RDF . 'direction', $direction),
             ]),
-            rdfDirection: 'compound-literal',
+            rdfDirection: RdfDirection::CompoundLiteral,
         );
 
         Assert::same($twice, [
@@ -82,7 +83,7 @@ final class FromRdfDetailsTest
                 $this->quad('http://s', 'http://p', 'http://x'),
                 $this->quad('http://x', self::RDF . 'direction', $direction),
             ]),
-            rdfDirection: 'compound-literal',
+            rdfDirection: RdfDirection::CompoundLiteral,
         );
 
         Assert::same($iri, [
@@ -93,7 +94,7 @@ final class FromRdfDetailsTest
 
     public function skipsASharedCompoundNodeAndStillCollapsesTheNext(): void
     {
-        $direction = new Literal('ltr', Literal::XSD_STRING);
+        $direction = new Literal('ltr', Vocabulary::XSD_STRING);
 
         $result = JsonLd::fromRdf(
             new Dataset([
@@ -103,7 +104,7 @@ final class FromRdfDetailsTest
                 $this->quad('http://s', 'http://r', '_:b'),
                 $this->quad('_:b', self::RDF . 'direction', $direction),
             ]),
-            rdfDirection: 'compound-literal',
+            rdfDirection: RdfDirection::CompoundLiteral,
         );
 
         Assert::same($result, [
@@ -121,7 +122,7 @@ final class FromRdfDetailsTest
     {
         $result = JsonLd::fromRdf(new Dataset([
             $this->quad('http://s', 'http://p', '_:b'),
-            $this->quad('_:b', self::RDF . 'direction', new Literal('ltr', Literal::XSD_STRING)),
+            $this->quad('_:b', self::RDF . 'direction', new Literal('ltr', Vocabulary::XSD_STRING)),
         ]));
 
         Assert::same(count($result), 2);
@@ -132,7 +133,7 @@ final class FromRdfDetailsTest
         $dataset = new Dataset([
             $this->quad('http://s', 'http://p', '_:l'),
             $this->quad('_:l', self::RDF . 'rest', self::RDF . 'nil'),
-            $this->quad('_:l', self::RDF . 'first', new Literal('a', Literal::XSD_STRING)),
+            $this->quad('_:l', self::RDF . 'first', new Literal('a', Vocabulary::XSD_STRING)),
         ]);
 
         Assert::same(
@@ -146,7 +147,7 @@ final class FromRdfDetailsTest
         $dataset = new Dataset([
             $this->quad('http://s', 'http://p', '_:l'),
             $this->quad('_:l', self::RDF . 'type', self::RDF . 'List'),
-            $this->quad('_:l', self::RDF . 'first', new Literal('a', Literal::XSD_STRING)),
+            $this->quad('_:l', self::RDF . 'first', new Literal('a', Vocabulary::XSD_STRING)),
             $this->quad('_:l', self::RDF . 'rest', self::RDF . 'nil'),
         ]);
 
@@ -161,7 +162,7 @@ final class FromRdfDetailsTest
         $dataset = new Dataset([
             $this->quad('http://s', 'http://p', '_:l'),
             $this->quad('_:l', self::RDF . 'type', 'http://x/T'),
-            $this->quad('_:l', self::RDF . 'first', new Literal('a', Literal::XSD_STRING)),
+            $this->quad('_:l', self::RDF . 'first', new Literal('a', Vocabulary::XSD_STRING)),
             $this->quad('_:l', self::RDF . 'rest', self::RDF . 'nil'),
         ]);
 
@@ -171,11 +172,11 @@ final class FromRdfDetailsTest
     public function sortsNodesAndGraphsById(): void
     {
         $dataset = new Dataset([
-            $this->quad('http://z', 'http://p', new Literal('1', Literal::XSD_STRING)),
-            $this->quad('http://a', 'http://p', new Literal('2', Literal::XSD_STRING)),
-            $this->quad('http://s2', 'http://p', new Literal('3', Literal::XSD_STRING), 'http://g/z'),
-            $this->quad('http://s1', 'http://p', new Literal('4', Literal::XSD_STRING), 'http://g/z'),
-            $this->quad('http://s', 'http://p', new Literal('5', Literal::XSD_STRING), 'http://g/a'),
+            $this->quad('http://z', 'http://p', new Literal('1', Vocabulary::XSD_STRING)),
+            $this->quad('http://a', 'http://p', new Literal('2', Vocabulary::XSD_STRING)),
+            $this->quad('http://s2', 'http://p', new Literal('3', Vocabulary::XSD_STRING), 'http://g/z'),
+            $this->quad('http://s1', 'http://p', new Literal('4', Vocabulary::XSD_STRING), 'http://g/z'),
+            $this->quad('http://s', 'http://p', new Literal('5', Vocabulary::XSD_STRING), 'http://g/a'),
         ]);
 
         $result = JsonLd::fromRdf($dataset);
@@ -265,7 +266,7 @@ final class FromRdfDetailsTest
         $tooDeep = str_repeat('[', 512) . str_repeat(']', 512);
 
         foreach ([false, true] as $native) {
-            $dataset = new Dataset([$this->quad('http://s', 'http://p', new Literal($deepest, Literal::RDF_JSON))]);
+            $dataset = new Dataset([$this->quad('http://s', 'http://p', new Literal($deepest, Vocabulary::RDF_JSON))]);
             $result = JsonLd::fromRdf($dataset, useNativeTypes: $native);
 
             Assert::same(count($result), 1);
@@ -274,7 +275,7 @@ final class FromRdfDetailsTest
 
             try {
                 JsonLd::fromRdf(
-                    new Dataset([$this->quad('http://s', 'http://p', new Literal($tooDeep, Literal::RDF_JSON))]),
+                    new Dataset([$this->quad('http://s', 'http://p', new Literal($tooDeep, Vocabulary::RDF_JSON))]),
                     useNativeTypes: $native,
                 );
             } catch (InvalidInputException $exception) {
@@ -288,12 +289,12 @@ final class FromRdfDetailsTest
     public function splitsI18nDatatypesAtTheFirstUnderscoreOnly(): void
     {
         $dataset = new Dataset([
-            $this->quad('http://s', 'http://p', new Literal('v', ToRdf::I18N . 'en_a_b')),
-            $this->quad('http://s', 'http://q', new Literal('w', ToRdf::I18N . '_rtl')),
+            $this->quad('http://s', 'http://p', new Literal('v', Vocabulary::I18N . 'en_a_b')),
+            $this->quad('http://s', 'http://q', new Literal('w', Vocabulary::I18N . '_rtl')),
         ]);
 
         Assert::same(
-            JsonLd::fromRdf($dataset, rdfDirection: 'i18n-datatype'),
+            JsonLd::fromRdf($dataset, rdfDirection: RdfDirection::I18nDatatype),
             [[
                 '@id' => 'http://s',
                 'http://p' => [['@language' => 'en', '@direction' => 'a_b', '@value' => 'v']],

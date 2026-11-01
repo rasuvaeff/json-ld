@@ -9,6 +9,8 @@ use Psr\Http\Client\ClientInterface;
 use Psr\Http\Message\RequestFactoryInterface;
 use Psr\Http\Message\RequestInterface;
 use Rasuvaeff\JsonLd\Exception\DocumentLoadingException;
+use Rasuvaeff\JsonLd\Exception\ErrorCode;
+use Rasuvaeff\JsonLd\Exception\InvalidInputException;
 use Rasuvaeff\JsonLd\Exception\InvalidJsonException;
 use Rasuvaeff\JsonLd\Json;
 
@@ -45,11 +47,11 @@ final readonly class PsrContextLoader implements ContextLoaderInterface
         $scheme = strtolower((string) parse_url($reference, PHP_URL_SCHEME));
 
         if ($scheme !== 'http' && $scheme !== 'https') {
-            throw new DocumentLoadingException(sprintf('Only http and https references can be loaded, "%s" given', $reference));
+            throw new DocumentLoadingException(ErrorCode::LoadingDocumentFailed, sprintf('Only http and https references can be loaded, "%s" given', $reference));
         }
 
         if ($this->urlPolicy instanceof \Closure && !($this->urlPolicy)($reference)) {
-            throw new DocumentLoadingException(sprintf('The URL policy refused "%s"', $reference));
+            throw new DocumentLoadingException(ErrorCode::LoadingDocumentFailed, sprintf('The URL policy refused "%s"', $reference));
         }
 
         // psr/http-message 1.0 declares withHeader() as returning MessageInterface, 1.1 and 2.0 return static
@@ -61,11 +63,12 @@ final readonly class PsrContextLoader implements ContextLoaderInterface
         try {
             $response = $this->client->sendRequest($request);
         } catch (ClientExceptionInterface $exception) {
-            throw new DocumentLoadingException($exception->getMessage(), $exception->getCode(), previous: $exception);
+            throw new DocumentLoadingException(ErrorCode::LoadingDocumentFailed, $exception->getMessage(), $exception);
         }
 
         if ($response->getStatusCode() >= 400) {
             throw new DocumentLoadingException(
+                ErrorCode::LoadingDocumentFailed,
                 sprintf('Loading "%s" failed with HTTP status %d', $reference, $response->getStatusCode()),
             );
         }
@@ -73,19 +76,19 @@ final readonly class PsrContextLoader implements ContextLoaderInterface
         $size = $response->getBody()->getSize();
 
         if ($size !== null && $size > $this->maxBytes) {
-            throw new DocumentLoadingException(sprintf('Response of "%s" exceeds %d bytes', $reference, $this->maxBytes));
+            throw new DocumentLoadingException(ErrorCode::LoadingDocumentFailed, sprintf('Response of "%s" exceeds %d bytes', $reference, $this->maxBytes));
         }
 
         $body = $response->getBody()->read($this->maxBytes + 1);
 
         if (strlen($body) > $this->maxBytes) {
-            throw new DocumentLoadingException(sprintf('Response of "%s" exceeds %d bytes', $reference, $this->maxBytes));
+            throw new DocumentLoadingException(ErrorCode::LoadingDocumentFailed, sprintf('Response of "%s" exceeds %d bytes', $reference, $this->maxBytes));
         }
 
         try {
             return new LoadedContext(documentUrl: $reference, document: Json::decode($body));
-        } catch (InvalidJsonException $exception) {
-            throw new DocumentLoadingException(sprintf('Response of "%s" is not a JSON document', $reference), $exception->getCode(), previous: $exception);
+        } catch (InvalidJsonException|InvalidInputException $exception) {
+            throw new DocumentLoadingException(ErrorCode::LoadingDocumentFailed, sprintf('Response of "%s" is not a JSON document', $reference), $exception);
         }
     }
 }
