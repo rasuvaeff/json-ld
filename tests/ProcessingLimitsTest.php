@@ -90,7 +90,7 @@ final class ProcessingLimitsTest
 
         Assert::same($caught?->errorCode(), ErrorCode::LoadingDocumentFailed);
         // PHP 8.6 adds the location ("Syntax error near location 1:7")
-        Assert::true(str_starts_with((string) $caught?->getMessage(), 'Syntax error'));
+        Assert::true(str_starts_with($caught?->getMessage(), 'Syntax error'));
         Assert::instanceOf($caught?->getPrevious(), \JsonException::class);
     }
 
