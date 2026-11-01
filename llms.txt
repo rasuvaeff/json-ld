@@ -1,6 +1,8 @@
 # json-ld
 
-JSON-LD 1.1 processor for PHP: expand, flatten, node API, RDF and N-Quads.
+JSON-LD 1.1 processor for PHP: expand, flatten, node API, RDF, N-Quads and
+W3C RDF Dataset Canonicalization (RDFC-1.0). It reads JSON-LD; it does not
+emit schema.org markup (use rasuvaeff/yii3-seo for that).
 
 Install: `composer require rasuvaeff/json-ld`
 
@@ -12,42 +14,84 @@ Runtime deps: `ext-json`, `ext-mbstring`, `psr/http-client ^1.0`,
 - PHP 8.3+, `declare(strict_types=1)`, documents are PHP arrays (never stdClass).
 - No implicit I/O: remote contexts load only through an injected
   `ContextLoaderInterface`; the default `InlineContextLoader` refuses URLs.
-  `PsrContextLoader` takes a URL policy closure and a body size limit.
-- Every `JsonLdException` message is the W3C error code (`invalid @id value`).
-- Not implemented: compaction, framing, JSON-LD 1.0 processing mode.
-- Compare RDF with `Dataset::equals()` (blank node renaming), not text.
+  `MapContextLoader` serves a fixed URL => document map; `PsrContextLoader`
+  takes a URL policy closure and a body size limit.
+- Branch on `JsonLdException::errorCode(): ErrorCode`, not on the message.
+- Any Throwable from a loader surfaces as `DocumentLoadingException`
+  (`loading remote context failed` / `loading document failed`), original as `getPrevious()`.
+- Scope: expansion, flattening, node API, toRdf/fromRdf, N-Quads, RDFC-1.0.
+  Not implemented: compaction, framing, JSON-LD 1.0 processing mode.
+- Compare RDF with `Dataset::equals()` (RDFC-1.0 isomorphism), not text.
 
 ## API
 
 ```php
-use Rasuvaeff\JsonLd\ExpandOptions;
 use Rasuvaeff\JsonLd\JsonLd;
+use Rasuvaeff\JsonLd\ProcessingOptions;
+use Rasuvaeff\JsonLd\RdfDirection;
 
-$o = new ExpandOptions(base: 'https://example.com/', documentUrl: null, expandContext: null, loader: $loader);
+// constructor order: base, documentUrl, expandContext, loader, maxDepth, maxBytes
+$o = new ProcessingOptions(
+    base: 'https://example.com/',
+    documentUrl: null,
+    expandContext: null,
+    loader: $loader,
+    maxDepth: 512,      // nesting cap for inline JSON strings and for expansion (document nested too deeply)
+    maxBytes: null,     // length cap for inline JSON strings (document too large); null = no limit
+);
 
-JsonLd::expand(array|string $input, ?ExpandOptions $o = null): list<mixed>;
-JsonLd::flatten(array|string $input, ?ExpandOptions $o = null): list<array>;   // sorted by @id, blank nodes _:b0...
-JsonLd::document(array|string $input, ?ExpandOptions $o = null): Graph\Document;
-JsonLd::toRdf(array|string $input, ?ExpandOptions $o = null, bool $produceGeneralizedRdf = false, ?string $rdfDirection = null): Rdf\Dataset;
-JsonLd::fromRdf(Rdf\Dataset $d, bool $useNativeTypes = false, bool $useRdfType = false, ?string $rdfDirection = null): list<mixed>;
+JsonLd::expand(array|string $input, ?ProcessingOptions $o = null): list<mixed>;
+JsonLd::flatten(array|string $input, ?ProcessingOptions $o = null): list<array>;   // sorted by @id, blank nodes _:b0...
+JsonLd::document(array|string $input, ?ProcessingOptions $o = null): Graph\Document;
+JsonLd::toRdf(array|string $input, ?ProcessingOptions $o = null, bool $produceGeneralizedRdf = false, ?RdfDirection $rdfDirection = null): Rdf\Dataset;
+JsonLd::fromRdf(Rdf\Dataset $d, bool $useNativeTypes = false, bool $useRdfType = false, ?RdfDirection $rdfDirection = null): list<mixed>;
 JsonLd::serializeNQuads(Rdf\Dataset $d): string;
 JsonLd::parseNQuads(string $nquads): Rdf\Dataset;   // InvalidNQuadsException on bad syntax
 ```
 
+`RdfDirection::I18nDatatype`, `RdfDirection::CompoundLiteral`.
 A string input is inline JSON (`{`/`[`) or a URL given to the loader.
+`Expander::expand()` and `Flattener::flatten()` are the same algorithms as instances.
 
 Loaders: `Loader\ContextLoaderInterface::load(string $reference): LoadedContext`
 (`documentUrl`, `document`, `contextUrl`); `InlineContextLoader`;
+`new MapContextLoader(['https://schema.org/' => ['@context' => ['@vocab' => 'https://schema.org/']]])` (exact URL match);
 `new PsrContextLoader($client, $requestFactory, urlPolicy: fn(string $u): bool => ..., maxBytes: 1_048_576)`.
 
-Node API: `$doc = JsonLd::document(...)`; `$doc->defaultGraph()`, `$doc->graph(string $name)`,
-`$graph->nodes()`, `->node(string $id)`, `->byType(string $iri)`;
-`Node::id()`, `types()`, `hasType()`, `properties()`, `values($p)`, `value($p)`, `references($p)`, `reference($p)`, `toArray()`.
+Node API (built from the node map: embedded nodes are nodes, references replace them):
+`$doc = JsonLd::document(...)`; `Graph\Document::fromExpanded(list $expanded)`;
+`$doc->defaultGraph()`, `$doc->graph(string $name)`, `$doc->graphs()`;
+`$graph->nodes()` (document order), `->node(string $id)`, `->byType(string $iri)`;
+`new Graph\Graph(list $flattenedNodeObjects)`;
+`Node::id()` (`_:b0`... for nodes without @id; input blank labels are relabeled), `types()`, `hasType()`,
+`properties()`, `values($p)` (scalars), `value($p)`, `valueObjects($p): list<Graph\Value>`
+(`value`, `language`, `type`, `direction`), `references($p)`, `reference($p)`, `toArray()`.
 
 IRIs: `Iri::of('http://a/b')->resolve(Iri::of('../c'))`, `isAbsolute()`, `(string)`.
 
-RDF: `Dataset::equals()`, `canonicalHash()`, `quads()`; `Quad(subject, predicate, object, graph)`;
-terms `Rdf\Iri`, `Rdf\BlankNode`, `Rdf\Literal`.
+RDF: `Dataset` (`public list<Quad> $quads`, `Dataset::of(Quad ...)`), `equals()`,
+`canonicalNQuads()`, `canonicalHash()` (SHA-256 hex of the canonical N-Quads);
+`Quad(subject, predicate, object, graph)`; terms `Rdf\Iri`, `Rdf\BlankNode`, `Rdf\Literal`
+(`typed()`, `langString()`, `string()`); constants in `Rdf\Vocabulary` (`RDF_TYPE`,
+`RDF_FIRST`, `RDF_REST`, `RDF_NIL`, `RDF_LANGSTRING`, `RDF_JSON`, `XSD_STRING`, ...).
 
-Exceptions (all extend `Exception\JsonLdException`): `InvalidContextException`, `InvalidInputException`,
-`ContextRecursionException`, `DocumentLoadingException`, `InvalidJsonException`, `InvalidNQuadsException`.
+RDFC-1.0:
+```php
+$form = (new Rdf\Canonicalizer(hashAlgorithm: Rdf\HashAlgorithm::Sha256, workFactor: 4))->canonicalize($dataset);
+$form->nquads;             // canonical N-Quads, "\n"-terminated lines, sorted
+$form->issuedIdentifiers;  // ['_:e0' => '_:c14n0', ...]
+$form->hash();             // hex digest with the same algorithm
+```
+Poison graphs: Hash N-Degree Quads may run `workFactor × n` times per blank node
+(n = blank nodes with a shared first-degree hash); beyond that
+`CanonicalizationLimitException` (`canonicalization limit exceeded`). `equals()`,
+`canonicalNQuads()` and `canonicalHash()` can throw it.
+
+Exceptions (all extend `Exception\JsonLdException`, `errorCode(): Exception\ErrorCode`):
+`InvalidContextException`, `InvalidInputException`, `ContextRecursionException`,
+`DocumentLoadingException`, `InvalidJsonException` (`loading document failed`),
+`InvalidNQuadsException` (`invalid N-Quads`), `CanonicalizationLimitException`.
+`ErrorCode` holds the W3C JSON-LD 1.1 API codes, `recursive context inclusion`, and four
+processor codes: `document nested too deeply`, `document too large`, `invalid N-Quads`,
+`canonicalization limit exceeded`.
+Constructor: `new DocumentLoadingException(ErrorCode::LoadingDocumentFailed, ?string $message = null, ?Throwable $previous = null)`.

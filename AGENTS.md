@@ -4,10 +4,13 @@ Guidance for AI agents working on this package. Read before changing code.
 
 ## What this is
 
-JSON-LD 1.1 processor for PHP: expand, flatten, node API, RDF and N-Quads.
-Namespace: `Rasuvaeff\JsonLd` (PSR-4: `src/`). The public API turns compact
-JSON-LD documents into expanded/flattened forms, exposes the node API and
-converts to RDF graphs serialized as N-Quads.
+JSON-LD 1.1 processor for PHP: expand, flatten, node API, RDF, N-Quads and
+RDF Dataset Canonicalization (RDFC-1.0). Namespace: `Rasuvaeff\JsonLd`
+(PSR-4: `src/`). The public API turns compact JSON-LD documents into
+expanded/flattened forms, exposes the node API (built from the node map) and
+converts to RDF datasets serialized as N-Quads, with a canonical form and
+hash. It reads JSON-LD; it is not a schema.org emitter (that is
+`rasuvaeff/yii3-seo`). Scope for 1.0: no compaction, no framing.
 
 ## Golden rules
 
@@ -58,7 +61,24 @@ make release-check
 - W3C suite (`tests/fixtures/w3c`): the `Unit` suite runs expand, flatten, toRdf and
   fromRdf; JSON-LD 1.0 cases (`processingMode`/`specVersion` json-ld-1.0) are not run
   (see `W3cManifest`), the remaining skips live in the `SKIPPED` constants of the
-  `W3c*Test` classes with their reasons.
+  `W3c*Test` classes with their reasons. The harnesses compare
+  `errorCode()->value` with `expectErrorCode`.
+- RDFC-1.0 suite (`tests/fixtures/rdf-canon`, copied unchanged from w3c/rdf-canon at
+  the commit named in its `LICENSE.md`): `W3cRdfCanonTest` runs all 86 entries
+  (evaluation, map, negative), nothing skipped. Keep it at 86/86.
+- **Error codes are the contract.** Every exception carries an `ErrorCode`; W3C
+  codes for JSON-LD failures, the four processor codes for the rest. New failure →
+  pick an existing W3C code or add a processor case, never a bare message.
+  `DocumentExpansion::run()` and `ContextProcessor::load()` wrap **every**
+  `Throwable` from a loader in `DocumentLoadingException`; keep it that way.
+- **Canonicalization work limit.** `Canonicalizer::DEFAULT_WORK_FACTOR` (4) is
+  calibrated: W3C test044–046 need 43 Hash N-Degree Quads runs for one of 12
+  non-unique blank nodes (factor 3.6), the 10-node clique (test074) must fail fast,
+  cycles and lists of equal values need about 1. Lowering it below 4 breaks the
+  suite; raising it makes poison graphs more expensive (`factor × n²` calls).
+- `Graph\Document` is built from `NodeMap` (same as flatten): blank node labels are
+  issued by the node map, so they change whenever node-map traversal order changes —
+  that is a visible behaviour change, note it in the CHANGELOG.
 - Remote context loading is opt-in: the processor receives documents as
   in-memory data; anything hitting the network goes through an explicitly
   injected `ContextLoaderInterface` and never happens as a side effect of
@@ -67,8 +87,9 @@ make release-check
   `ml/json-ld` or `embed/embed` (owner's decision) — they serve as
   behavioral reference only. The source of algorithms is the open specs:
   W3C JSON-LD 1.1 / Processing Algorithms, RFC 3986 (§5 IRI resolution),
-  RDF 1.1 N-Quads, IANA special-purpose address registries. Only the W3C
-  test suite is vendored, as test data under its own license.
+  RDF 1.1 N-Quads, W3C RDF Dataset Canonicalization (RDFC-1.0), IANA
+  special-purpose address registries. Only the W3C test suites (JSON-LD API,
+  rdf-canon) are vendored, as test data under their own license.
 - Code: `declare(strict_types=1)`, `final readonly class`, `#[\Override]`,
   explicit types.
 - **Validation patterns anchor with `\z`, never `$`.** In PCRE `$` also matches

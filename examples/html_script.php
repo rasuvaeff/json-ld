@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 require __DIR__ . '/../vendor/autoload.php';
 
-use Rasuvaeff\JsonLd\ExpandOptions;
 use Rasuvaeff\JsonLd\JsonLd;
+use Rasuvaeff\JsonLd\ProcessingOptions;
 
 // Needs ext-dom (present in the composer:2 image).
 $html = <<<'HTML'
@@ -17,7 +17,7 @@ $html = <<<'HTML'
     HTML;
 
 $loader = require __DIR__ . '/support.php';
-$options = new ExpandOptions(loader: $loader, base: 'https://example.com/page');
+$options = new ProcessingOptions(loader: $loader, base: 'https://example.com/page');
 
 $page = new DOMDocument();
 $page->loadHTML($html, LIBXML_NOERROR);
