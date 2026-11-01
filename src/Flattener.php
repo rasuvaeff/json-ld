@@ -13,8 +13,6 @@ namespace Rasuvaeff\JsonLd;
  */
 final readonly class Flattener
 {
-    public function __construct(private Expander $expander = new Expander()) {}
-
     /**
      * Flattens a document given as decoded JSON or an inline JSON string.
      *
@@ -23,11 +21,11 @@ final readonly class Flattener
      * @return list<array<string, mixed>> every node of the document, embedded nodes
      *                    replaced by references, sorted by subject
      *
-     * @throws Exception\JsonLdException with a W3C error code as the message
+     * @throws Exception\JsonLdException
      */
-    public function flatten(string|array $input, ?ExpandOptions $options = null): array
+    public function flatten(string|array $input, ?ProcessingOptions $options = null): array
     {
-        $map = NodeMap::of($this->expander->expandRaw($input, $options));
+        $map = NodeMap::of(DocumentExpansion::run($input, $options));
         $graphs = $map->graphs;
 
         $default = $graphs[Keywords::DEFAULT_GRAPH];

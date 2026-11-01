@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Rasuvaeff\JsonLd\Tests;
 
 use Rasuvaeff\JsonLd\Exception\JsonLdException;
-use Rasuvaeff\JsonLd\ExpandOptions;
 use Rasuvaeff\JsonLd\Flattener;
 use Rasuvaeff\JsonLd\JsonLd;
+use Rasuvaeff\JsonLd\ProcessingOptions;
 use Rasuvaeff\JsonLd\Tests\Support\FixtureContextLoader;
 use Rasuvaeff\JsonLd\Tests\Support\W3cManifest;
 use Testo\Assert;
@@ -32,11 +32,11 @@ final class W3cFlattenTest
     #[DataProvider('suiteProvider')]
     public function case(mixed $input, mixed $expected, ?string $expectedError, ?string $base, mixed $expandContext, ?string $documentUrl): void
     {
-        $options = new ExpandOptions(
+        $options = new ProcessingOptions(
             base: $base,
+            documentUrl: $documentUrl,
             expandContext: $expandContext,
             loader: new FixtureContextLoader(),
-            documentUrl: $documentUrl,
         );
 
         if ($expectedError !== null) {
@@ -45,7 +45,7 @@ final class W3cFlattenTest
             try {
                 JsonLd::flatten((array) $input, $options);
             } catch (JsonLdException $exception) {
-                $message = $exception->getMessage();
+                $message = $exception->errorCode()->value;
             }
 
             Assert::same($message, $expectedError);

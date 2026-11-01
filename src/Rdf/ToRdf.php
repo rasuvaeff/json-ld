@@ -5,10 +5,11 @@ declare(strict_types=1);
 namespace Rasuvaeff\JsonLd\Rdf;
 
 use Rasuvaeff\JsonLd\Context\Syntax;
-use Rasuvaeff\JsonLd\Expander;
-use Rasuvaeff\JsonLd\ExpandOptions;
+use Rasuvaeff\JsonLd\DocumentExpansion;
 use Rasuvaeff\JsonLd\Keywords;
 use Rasuvaeff\JsonLd\NodeMap;
+use Rasuvaeff\JsonLd\ProcessingOptions;
+use Rasuvaeff\JsonLd\RdfDirection;
 
 /**
  * RDF serialization of JSON-LD, JSON-LD 1.1 API section 8.1 ("Deserialize
@@ -24,35 +25,20 @@ use Rasuvaeff\JsonLd\NodeMap;
  */
 final readonly class ToRdf
 {
-    public const string I18N = 'https://www.w3.org/ns/i18n#';
-
-    private const string XSD_BOOLEAN = 'http://www.w3.org/2001/XMLSchema#boolean';
-
-    private const string XSD_INTEGER = 'http://www.w3.org/2001/XMLSchema#integer';
-
-    private const string XSD_DOUBLE = 'http://www.w3.org/2001/XMLSchema#double';
-
-    private const string RDF_VALUE = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#value';
-
-    private const string RDF_LANGUAGE = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#language';
-
-    private const string RDF_DIRECTION = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#direction';
-
     /**
-     * @param string|null $rdfDirection `i18n-datatype`, `compound-literal` or null (base direction is dropped)
+     * @param RdfDirection|null $rdfDirection null drops the base direction
      */
     public function __construct(
-        private Expander $expander = new Expander(),
         private bool $produceGeneralizedRdf = false,
-        private ?string $rdfDirection = null,
+        private ?RdfDirection $rdfDirection = null,
     ) {}
 
     /**
      * @param string|array<mixed> $input
      */
-    public function toRdf(string|array $input, ?ExpandOptions $options = null): Dataset
+    public function toRdf(string|array $input, ?ProcessingOptions $options = null): Dataset
     {
-        $map = NodeMap::of($this->expander->expandRaw($input, $options));
+        $map = NodeMap::of(DocumentExpansion::run($input, $options));
         $graphs = $map->graphs;
         ksort($graphs, SORT_STRING);
 
@@ -96,7 +82,7 @@ final readonly class ToRdf
                         /** @var JsonValue $type */
                         foreach ($values as $type) {
                             if (is_string($type) && $this->wellFormed($type)) {
-                                $quads[] = new Quad($subjectTerm, new Iri(Literal::RDF_TYPE), $this->node($type), $graphTerm);
+                                $quads[] = new Quad($subjectTerm, new Iri(Vocabulary::RDF_TYPE), $this->node($type), $graphTerm);
                             }
                         }
 
@@ -169,7 +155,7 @@ final readonly class ToRdf
     private function listToRdf(array $list, array &$quads, Iri|BlankNode|null $graph, NodeMap $map): Iri|BlankNode
     {
         if ($list === []) {
-            return new Iri(Literal::RDF_NIL);
+            return new Iri(Vocabulary::RDF_NIL);
         }
 
         $cells = [];
@@ -184,15 +170,15 @@ final readonly class ToRdf
             $object = $this->objectToRdf($item, $embedded, $graph, $map);
 
             if ($object !== null) {
-                $quads[] = new Quad($cells[$index], new Iri(Literal::RDF_FIRST), $object, $graph);
+                $quads[] = new Quad($cells[$index], new Iri(Vocabulary::RDF_FIRST), $object, $graph);
             }
 
             array_push($quads, ...$embedded);
 
             $quads[] = new Quad(
                 $cells[$index],
-                new Iri(Literal::RDF_REST),
-                $cells[$index + 1] ?? new Iri(Literal::RDF_NIL),
+                new Iri(Vocabulary::RDF_REST),
+                $cells[$index + 1] ?? new Iri(Vocabulary::RDF_NIL),
                 $graph,
             );
         }
@@ -220,18 +206,18 @@ final readonly class ToRdf
         }
 
         if ($datatype === Keywords::JSON) {
-            return Literal::typed(JsonCanonicalizer::serialize($value), Literal::RDF_JSON);
+            return Literal::typed(JsonCanonicalizer::serialize($value), Vocabulary::RDF_JSON);
         }
 
         if (is_bool($value)) {
             $lexical = $value ? 'true' : 'false';
-            $datatype ??= self::XSD_BOOLEAN;
-        } elseif ((is_float($value) && (fmod($value, 1.0) !== 0.0 || abs($value) >= 1e21)) || (is_int($value) || is_float($value)) && $datatype === self::XSD_DOUBLE) {
+            $datatype ??= Vocabulary::XSD_BOOLEAN;
+        } elseif ((is_float($value) && (fmod($value, 1.0) !== 0.0 || abs($value) >= 1e21)) || (is_int($value) || is_float($value)) && $datatype === Vocabulary::XSD_DOUBLE) {
             $lexical = $this->doubleCanonical((float) $value);
-            $datatype ??= self::XSD_DOUBLE;
+            $datatype ??= Vocabulary::XSD_DOUBLE;
         } elseif (is_int($value) || is_float($value)) {
             $lexical = is_int($value) ? (string) $value : sprintf('%.0f', $value);
-            $datatype ??= self::XSD_INTEGER;
+            $datatype ??= Vocabulary::XSD_INTEGER;
         } else {
             $lexical = is_string($value) ? $value : '';
         }
@@ -239,19 +225,19 @@ final readonly class ToRdf
         /** @var JsonValue $direction */
         $direction = $item[Keywords::DIRECTION] ?? null;
 
-        if ($direction !== null && $this->rdfDirection === 'i18n-datatype') {
-            return Literal::typed($lexical, self::I18N . strtolower(is_string($language) ? $language : '') . '_' . (is_string($direction) ? $direction : ''));
+        if ($direction !== null && $this->rdfDirection === RdfDirection::I18nDatatype) {
+            return Literal::typed($lexical, Vocabulary::I18N . strtolower(is_string($language) ? $language : '') . '_' . (is_string($direction) ? $direction : ''));
         }
 
-        if ($direction !== null && $this->rdfDirection === 'compound-literal') {
+        if ($direction !== null && $this->rdfDirection === RdfDirection::CompoundLiteral) {
             $node = new BlankNode(substr($map->issue(), 2));
-            $quads[] = new Quad($node, new Iri(self::RDF_VALUE), Literal::string($lexical), $graph);
+            $quads[] = new Quad($node, new Iri(Vocabulary::RDF_VALUE), Literal::string($lexical), $graph);
 
             if ($language !== null) {
-                $quads[] = new Quad($node, new Iri(self::RDF_LANGUAGE), Literal::string(strtolower($language)), $graph);
+                $quads[] = new Quad($node, new Iri(Vocabulary::RDF_LANGUAGE), Literal::string(strtolower($language)), $graph);
             }
 
-            $quads[] = new Quad($node, new Iri(self::RDF_DIRECTION), Literal::string(is_string($direction) ? $direction : ''), $graph);
+            $quads[] = new Quad($node, new Iri(Vocabulary::RDF_DIRECTION), Literal::string(is_string($direction) ? $direction : ''), $graph);
 
             return $node;
         }
@@ -260,7 +246,7 @@ final readonly class ToRdf
             return Literal::langString($lexical, $language);
         }
 
-        return Literal::typed($lexical, $datatype ?? Literal::XSD_STRING);
+        return Literal::typed($lexical, $datatype ?? Vocabulary::XSD_STRING);
     }
 
     private function wellFormed(string $id): bool

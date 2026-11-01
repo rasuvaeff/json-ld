@@ -7,8 +7,10 @@ namespace Rasuvaeff\JsonLd\Rdf;
 use ArrayObject;
 use JsonException;
 use Rasuvaeff\JsonLd\Context\Syntax;
+use Rasuvaeff\JsonLd\Exception\ErrorCode;
 use Rasuvaeff\JsonLd\Exception\InvalidInputException;
 use Rasuvaeff\JsonLd\Keywords;
+use Rasuvaeff\JsonLd\RdfDirection;
 
 /**
  * Serialization of RDF as JSON-LD, JSON-LD 1.1 API section 8.2: rebuilds
@@ -25,27 +27,13 @@ use Rasuvaeff\JsonLd\Keywords;
  */
 final readonly class FromRdf
 {
-    private const string XSD_BOOLEAN = 'http://www.w3.org/2001/XMLSchema#boolean';
-
-    private const string XSD_INTEGER = 'http://www.w3.org/2001/XMLSchema#integer';
-
-    private const string XSD_DOUBLE = 'http://www.w3.org/2001/XMLSchema#double';
-
-    private const string RDF_LIST = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#List';
-
-    private const string RDF_VALUE = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#value';
-
-    private const string RDF_LANGUAGE = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#language';
-
-    private const string RDF_DIRECTION = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#direction';
-
     /**
-     * @param string|null $rdfDirection `i18n-datatype`, `compound-literal` or null
+     * @param RdfDirection|null $rdfDirection null keeps i18n datatypes and compound literals as they are
      */
     public function __construct(
         private bool $useNativeTypes = false,
         private bool $useRdfType = false,
-        private ?string $rdfDirection = null,
+        private ?RdfDirection $rdfDirection = null,
     ) {}
 
     /**
@@ -83,11 +71,11 @@ final readonly class FromRdf
 
             $property = $quad->predicate->value;
 
-            if ($this->rdfDirection === 'compound-literal' && $property === self::RDF_DIRECTION) {
+            if ($this->rdfDirection === RdfDirection::CompoundLiteral && $property === Vocabulary::RDF_DIRECTION) {
                 $compoundSubjects[$name][$subject] = true;
             }
 
-            if ($property === Literal::RDF_TYPE && !$this->useRdfType && !$object instanceof Literal) {
+            if ($property === Vocabulary::RDF_TYPE && !$this->useRdfType && !$object instanceof Literal) {
                 $objectId = $this->id($object);
 
                 if (!in_array($objectId, $graphMap[$name][$subject]['types'], strict: true)) {
@@ -119,7 +107,7 @@ final readonly class FromRdf
             if (!$object instanceof Literal) {
                 $objectId = $this->id($object);
 
-                if ($isNew && (Syntax::isBlankNodeId($objectId) || $objectId === Literal::RDF_NIL)) {
+                if ($isNew && (Syntax::isBlankNodeId($objectId) || $objectId === Vocabulary::RDF_NIL)) {
                     $usages[$name][$objectId][] = ['subject' => $subject, 'property' => $property, 'slot' => $value];
                 }
             }
@@ -243,7 +231,7 @@ final readonly class FromRdf
      */
     private function collapseLists(array &$graph, array $usages, array $usageTotals): void
     {
-        foreach ($usages[Literal::RDF_NIL] ?? [] as $usage) {
+        foreach ($usages[Vocabulary::RDF_NIL] ?? [] as $usage) {
             $node = $usage['subject'];
             $property = $usage['property'];
             $head = $usage['slot'];
@@ -252,12 +240,12 @@ final readonly class FromRdf
             $list = [];
             $listNodes = [];
 
-            while ($property === Literal::RDF_REST
+            while ($property === Vocabulary::RDF_REST
                 && Syntax::isBlankNodeId($node)
                 && isset($graph[$node], $usages[$node][0])
                 && $this->isWellFormedListNode($graph[$node], count($usages[$node]), $usageTotals[$node] ?? 0)
             ) {
-                array_unshift($list, $graph[$node]['props'][Literal::RDF_FIRST][0]);
+                array_unshift($list, $graph[$node]['props'][Vocabulary::RDF_FIRST][0]);
                 array_unshift($listNodes, $node);
 
                 $usage = $usages[$node][0];
@@ -286,10 +274,10 @@ final readonly class FromRdf
         $properties = array_keys($node['props']);
         sort($properties);
 
-        return $properties === [Literal::RDF_FIRST, Literal::RDF_REST]
-            && count($node['props'][Literal::RDF_FIRST]) === 1
-            && count($node['props'][Literal::RDF_REST]) === 1
-            && ($node['types'] === [] || $node['types'] === [self::RDF_LIST]);
+        return $properties === [Vocabulary::RDF_FIRST, Vocabulary::RDF_REST]
+            && count($node['props'][Vocabulary::RDF_FIRST]) === 1
+            && count($node['props'][Vocabulary::RDF_REST]) === 1
+            && ($node['types'] === [] || $node['types'] === [Vocabulary::RDF_LIST]);
     }
 
     /**
@@ -311,17 +299,17 @@ final readonly class FromRdf
 
             $props = $graph[$id]['props'];
             /** @var array<string, JsonValue> $literal */
-            $literal = [Keywords::VALUE => ($props[self::RDF_VALUE][0] ?? null)?->offsetGet(Keywords::VALUE)];
+            $literal = [Keywords::VALUE => ($props[Vocabulary::RDF_VALUE][0] ?? null)?->offsetGet(Keywords::VALUE)];
 
             /** @var JsonValue $language */
-            $language = ($props[self::RDF_LANGUAGE][0] ?? null)?->offsetGet(Keywords::VALUE);
+            $language = ($props[Vocabulary::RDF_LANGUAGE][0] ?? null)?->offsetGet(Keywords::VALUE);
 
             if ($language !== null) {
                 $literal[Keywords::LANGUAGE] = $language;
             }
 
             /** @var JsonValue $direction */
-            $direction = ($props[self::RDF_DIRECTION][0] ?? null)?->offsetGet(Keywords::VALUE);
+            $direction = ($props[Vocabulary::RDF_DIRECTION][0] ?? null)?->offsetGet(Keywords::VALUE);
 
             if ($direction !== null) {
                 $literal[Keywords::DIRECTION] = $direction;
@@ -343,24 +331,24 @@ final readonly class FromRdf
             return [Keywords::ID => $this->id($term)];
         }
 
-        $datatype = $term->datatype ?? Literal::XSD_STRING;
+        $datatype = $term->datatype ?? Vocabulary::XSD_STRING;
         $lexical = $term->value;
         $result = [];
         $converted = $lexical;
         $type = null;
 
         if ($this->useNativeTypes) {
-            if ($datatype === Literal::XSD_STRING) {
+            if ($datatype === Vocabulary::XSD_STRING) {
                 $converted = $lexical;
-            } elseif ($datatype === self::XSD_BOOLEAN) {
+            } elseif ($datatype === Vocabulary::XSD_BOOLEAN) {
                 if (in_array($lexical, ['true', 'false', '1', '0'], strict: true)) {
                     $converted = $lexical === 'true' || $lexical === '1';
                 } else {
                     $type = $datatype;
                 }
-            } elseif ($datatype === self::XSD_INTEGER && $this->fitsInteger($lexical)) {
+            } elseif ($datatype === Vocabulary::XSD_INTEGER && $this->fitsInteger($lexical)) {
                 $converted = (int) $lexical;
-            } elseif ($datatype === self::XSD_DOUBLE
+            } elseif ($datatype === Vocabulary::XSD_DOUBLE
                 && preg_match('~^[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?\z~', $lexical) === 1
                 && is_finite((float) $lexical)
             ) {
@@ -368,40 +356,40 @@ final readonly class FromRdf
             } else {
                 $type = $datatype;
             }
-        } elseif ($datatype === Literal::RDF_LANGSTRING) {
+        } elseif ($datatype === Vocabulary::RDF_LANGSTRING) {
             $result[Keywords::LANGUAGE] = $term->language;
-        } elseif ($datatype === Literal::RDF_JSON) {
+        } elseif ($datatype === Vocabulary::RDF_JSON) {
             try {
                 /** @var JsonValue $converted */
                 $converted = json_decode($lexical, associative: true, depth: 512, flags: JSON_THROW_ON_ERROR);
             } catch (JsonException) {
-                throw new InvalidInputException('invalid JSON literal');
+                throw new InvalidInputException(ErrorCode::InvalidJsonLiteral);
             }
 
             $type = Keywords::JSON;
-        } elseif ($this->rdfDirection === 'i18n-datatype' && str_starts_with($datatype, ToRdf::I18N)) {
-            $parts = explode('_', substr($datatype, strlen(ToRdf::I18N)), 2);
+        } elseif ($this->rdfDirection === RdfDirection::I18nDatatype && str_starts_with($datatype, Vocabulary::I18N)) {
+            $parts = explode('_', substr($datatype, strlen(Vocabulary::I18N)), 2);
 
             if ($parts[0] !== '') {
                 $result[Keywords::LANGUAGE] = $parts[0];
             }
 
             $result[Keywords::DIRECTION] = $parts[1] ?? '';
-        } elseif ($datatype !== Literal::XSD_STRING) {
+        } elseif ($datatype !== Vocabulary::XSD_STRING) {
             $type = $datatype;
         }
 
-        if ($this->useNativeTypes && $datatype === Literal::RDF_LANGSTRING) {
+        if ($this->useNativeTypes && $datatype === Vocabulary::RDF_LANGSTRING) {
             $result[Keywords::LANGUAGE] = $term->language;
             $type = null;
         }
 
-        if ($this->useNativeTypes && $datatype === Literal::RDF_JSON) {
+        if ($this->useNativeTypes && $datatype === Vocabulary::RDF_JSON) {
             try {
                 /** @var JsonValue $converted */
                 $converted = json_decode($lexical, associative: true, depth: 512, flags: JSON_THROW_ON_ERROR);
             } catch (JsonException) {
-                throw new InvalidInputException('invalid JSON literal');
+                throw new InvalidInputException(ErrorCode::InvalidJsonLiteral);
             }
 
             $type = Keywords::JSON;

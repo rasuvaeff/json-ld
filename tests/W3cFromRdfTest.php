@@ -7,6 +7,7 @@ namespace Rasuvaeff\JsonLd\Tests;
 use Rasuvaeff\JsonLd\Exception\JsonLdException;
 use Rasuvaeff\JsonLd\JsonLd;
 use Rasuvaeff\JsonLd\Rdf\FromRdf;
+use Rasuvaeff\JsonLd\RdfDirection;
 use Rasuvaeff\JsonLd\Tests\Support\W3cManifest;
 use Testo\Assert;
 use Testo\Codecov\Covers;
@@ -26,7 +27,7 @@ final class W3cFromRdfTest
             $dataset,
             useNativeTypes: ($option['useNativeTypes'] ?? false) === true,
             useRdfType: ($option['useRdfType'] ?? false) === true,
-            rdfDirection: $option['rdfDirection'] ?? null,
+            rdfDirection: isset($option['rdfDirection']) ? RdfDirection::from($option['rdfDirection']) : null,
         );
 
         if ($expectedError !== null) {
@@ -35,7 +36,7 @@ final class W3cFromRdfTest
             try {
                 $fromRdf();
             } catch (JsonLdException $exception) {
-                $message = $exception->getMessage();
+                $message = $exception->errorCode()->value;
             }
 
             Assert::same($message, $expectedError);

@@ -11,7 +11,9 @@ use Rasuvaeff\JsonLd\Rdf\Dataset;
 use Rasuvaeff\JsonLd\Rdf\Iri;
 use Rasuvaeff\JsonLd\Rdf\Literal;
 use Rasuvaeff\JsonLd\Rdf\NQuads;
+use Rasuvaeff\JsonLd\Rdf\NQuadsWriter;
 use Rasuvaeff\JsonLd\Rdf\Quad;
+use Rasuvaeff\JsonLd\Rdf\Vocabulary;
 use Rasuvaeff\JsonLd\Tests\Support\Strict;
 use Testo\Assert;
 use Testo\Codecov\Covers;
@@ -19,6 +21,7 @@ use Testo\Test;
 
 #[Test]
 #[Covers(NQuads::class)]
+#[Covers(NQuadsWriter::class)]
 final class NQuadsSyntaxTest
 {
     public function reportsTheOneBasedLineNumber(): void
@@ -98,14 +101,14 @@ final class NQuadsSyntaxTest
         $plain = JsonLd::parseNQuads('<http://a> <http://b> "x" .')->quads[0]->object;
         $lang = JsonLd::parseNQuads('<http://a> <http://b> "x"@en-GB .')->quads[0]->object;
         $typed = JsonLd::parseNQuads('<http://a> <http://b> "x"^^<http://dt> .')->quads[0]->object;
-        $string = JsonLd::parseNQuads('<http://a> <http://b> "x"^^<' . Literal::XSD_STRING . '> .')->quads[0]->object;
+        $string = JsonLd::parseNQuads('<http://a> <http://b> "x"^^<' . Vocabulary::XSD_STRING . '> .')->quads[0]->object;
 
-        Assert::same([$plain->value, $plain->datatype, $plain->language], ['x', Literal::XSD_STRING, null]);
+        Assert::same([$plain->value, $plain->datatype, $plain->language], ['x', Vocabulary::XSD_STRING, null]);
         Assert::same($lang->language, 'en-GB');
-        Assert::same($lang->datatype, Literal::RDF_LANGSTRING);
+        Assert::same($lang->datatype, Vocabulary::RDF_LANGSTRING);
         Assert::same($typed->datatype, 'http://dt');
         Assert::null($typed->language);
-        Assert::same([$string->value, $string->datatype, $string->language], ['x', Literal::XSD_STRING, null]);
+        Assert::same([$string->value, $string->datatype, $string->language], ['x', Vocabulary::XSD_STRING, null]);
     }
 
     public function parsesEmptyAndTypedLiteralsWithoutPhpDiagnostics(): void
@@ -122,12 +125,12 @@ final class NQuadsSyntaxTest
         Assert::same(
             array_map(static fn(Literal $literal): array => [$literal->value, $literal->datatype, $literal->language], $objects),
             [
-                ['', Literal::XSD_STRING, null],
+                ['', Vocabulary::XSD_STRING, null],
                 ['', 'http://dt', null],
-                ['', Literal::RDF_LANGSTRING, 'en'],
+                ['', Vocabulary::RDF_LANGSTRING, 'en'],
                 ['x', 'http://dt', null],
-                ['x', Literal::RDF_LANGSTRING, 'fr'],
-                ["\u{4E2D}\u{1F600}", Literal::XSD_STRING, null],
+                ['x', Vocabulary::RDF_LANGSTRING, 'fr'],
+                ["\u{4E2D}\u{1F600}", Vocabulary::XSD_STRING, null],
             ],
         );
     }

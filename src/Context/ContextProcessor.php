@@ -6,16 +6,18 @@ namespace Rasuvaeff\JsonLd\Context;
 
 use Rasuvaeff\JsonLd\Exception\ContextRecursionException;
 use Rasuvaeff\JsonLd\Exception\DocumentLoadingException;
+use Rasuvaeff\JsonLd\Exception\ErrorCode;
 use Rasuvaeff\JsonLd\Exception\InvalidContextException;
 use Rasuvaeff\JsonLd\Exception\JsonLdException;
 use Rasuvaeff\JsonLd\Keywords;
 use Rasuvaeff\JsonLd\Loader\ContextLoaderInterface;
+use Rasuvaeff\JsonLd\Loader\LoadedContext;
 
 /**
  * Context processing and IRI expansion, JSON-LD 1.1 API sections 4.1 to 4.3.
  *
- * Every thrown exception message equals the corresponding JSON-LD error
- * code from the W3C test suite (for example `invalid @version value`).
+ * Every thrown exception carries the corresponding W3C error code
+ * ({@see JsonLdException::errorCode()}, for example `invalid @version value`).
  * Remote contexts are loaded only through the injected loader.
  *
  * @internal
@@ -64,7 +66,7 @@ final readonly class ContextProcessor
 
         if ($this->isMap($localContext) && array_key_exists('@propagate', $localContext)) {
             if (!is_bool($localContext['@propagate'])) {
-                throw new InvalidContextException('invalid @propagate value');
+                throw new InvalidContextException(ErrorCode::InvalidPropagateValue);
             }
 
             $propagate = $localContext['@propagate'];
@@ -79,7 +81,7 @@ final readonly class ContextProcessor
         foreach ($items as $context) {
             if ($context === null) {
                 if (!$overrideProtected && $activeContext->hasProtectedTerms()) {
-                    throw new InvalidContextException('invalid context nullification');
+                    throw new InvalidContextException(ErrorCode::InvalidContextNullification);
                 }
 
                 $previous = $result;
@@ -107,7 +109,7 @@ final readonly class ContextProcessor
             }
 
             if (!$this->isMap($context)) {
-                throw new InvalidContextException('invalid local context');
+                throw new InvalidContextException(ErrorCode::InvalidLocalContext);
             }
 
             $result = $this->processObject(
@@ -209,7 +211,7 @@ final readonly class ContextProcessor
         $resolved = Syntax::resolve($baseUrl, $reference);
 
         if (count($remoteContexts) >= self::MAX_REMOTE_CONTEXTS) {
-            throw new ContextRecursionException('context overflow');
+            throw new ContextRecursionException(ErrorCode::ContextOverflow);
         }
 
         if (in_array($resolved, $remoteContexts, strict: true)) {
@@ -217,13 +219,13 @@ final readonly class ContextProcessor
                 return $result;
             }
 
-            throw new ContextRecursionException('recursive context inclusion');
+            throw new ContextRecursionException(ErrorCode::RecursiveContextInclusion);
         }
 
         $document = $this->load($resolved);
 
         if (!$this->isMap($document->document) || !array_key_exists('@context', $document->document)) {
-            throw new InvalidContextException('invalid remote context');
+            throw new InvalidContextException(ErrorCode::InvalidRemoteContext);
         }
 
         return $this->process(
@@ -253,13 +255,13 @@ final readonly class ContextProcessor
             $version = $context['@version'];
 
             if ((!is_int($version) && !is_float($version)) || (float) $version !== 1.1) {
-                throw new InvalidContextException('invalid @version value');
+                throw new InvalidContextException(ErrorCode::InvalidVersionValue);
             }
         }
 
         if (array_key_exists('@import', $context)) {
             if (!is_string($context['@import'])) {
-                throw new InvalidContextException('invalid @import value');
+                throw new InvalidContextException(ErrorCode::InvalidImportValue);
             }
 
             $imported = $this->load(Syntax::resolve($baseUrl, $context['@import']));
@@ -268,11 +270,11 @@ final readonly class ContextProcessor
                 || !array_key_exists('@context', $imported->document)
                 || !$this->isMap($imported->document['@context'])
             ) {
-                throw new InvalidContextException('invalid remote context');
+                throw new InvalidContextException(ErrorCode::InvalidRemoteContext);
             }
 
             if (array_key_exists('@import', $imported->document['@context'])) {
-                throw new InvalidContextException('invalid context entry');
+                throw new InvalidContextException(ErrorCode::InvalidContextEntry);
             }
 
             unset($context['@import']);
@@ -290,7 +292,7 @@ final readonly class ContextProcessor
             } elseif (is_string($base) && $result->base !== null) {
                 $result->base = Syntax::resolve($result->base, $base);
             } else {
-                throw new InvalidContextException('invalid base IRI');
+                throw new InvalidContextException(ErrorCode::InvalidBaseIri);
             }
         }
 
@@ -304,12 +306,12 @@ final readonly class ContextProcessor
                 $expanded = $this->expandIri($result, $vocab, vocab: true, documentRelative: true);
 
                 if ($expanded === null || (!Syntax::isAbsoluteIri($expanded) && !Syntax::isBlankNode($expanded))) {
-                    throw new InvalidContextException('invalid vocab mapping');
+                    throw new InvalidContextException(ErrorCode::InvalidVocabMapping);
                 }
 
                 $result->vocab = $expanded;
             } else {
-                throw new InvalidContextException('invalid vocab mapping');
+                throw new InvalidContextException(ErrorCode::InvalidVocabMapping);
             }
         }
 
@@ -317,7 +319,7 @@ final readonly class ContextProcessor
             $language = $context['@language'];
 
             if ($language !== null && !is_string($language)) {
-                throw new InvalidContextException('invalid default language');
+                throw new InvalidContextException(ErrorCode::InvalidDefaultLanguage);
             }
 
             $result->language = $language;
@@ -327,7 +329,7 @@ final readonly class ContextProcessor
             $direction = $context['@direction'];
 
             if (!in_array($direction, [null, 'ltr', 'rtl'], strict: true)) {
-                throw new InvalidContextException('invalid base direction');
+                throw new InvalidContextException(ErrorCode::InvalidBaseDirection);
             }
 
             $result->direction = $direction;
@@ -337,7 +339,7 @@ final readonly class ContextProcessor
 
         if (array_key_exists('@protected', $context)) {
             if (!is_bool($context['@protected'])) {
-                throw new InvalidContextException('invalid @protected value');
+                throw new InvalidContextException(ErrorCode::InvalidProtectedValue);
             }
 
             $protected = $context['@protected'];
@@ -375,11 +377,11 @@ final readonly class ContextProcessor
                 return;
             }
 
-            throw new InvalidContextException('cyclic IRI mapping');
+            throw new InvalidContextException(ErrorCode::CyclicIriMapping);
         }
 
         if ($term === '') {
-            throw new InvalidContextException('invalid term definition');
+            throw new InvalidContextException(ErrorCode::InvalidTermDefinition);
         }
 
         $scope->defined[$term] = false;
@@ -387,17 +389,17 @@ final readonly class ContextProcessor
 
         if ($term === '@type') {
             if (!$this->isMap($value)) {
-                throw new InvalidContextException('keyword redefinition');
+                throw new InvalidContextException(ErrorCode::KeywordRedefinition);
             }
 
             /** @var JsonValue $memberValue */
             foreach ($value as $member => $memberValue) {
                 if (($member !== '@container' || $memberValue !== '@set') && $member !== '@protected') {
-                    throw new InvalidContextException('keyword redefinition');
+                    throw new InvalidContextException(ErrorCode::KeywordRedefinition);
                 }
             }
         } elseif (Keywords::isKeyword($term)) {
-            throw new InvalidContextException('keyword redefinition');
+            throw new InvalidContextException(ErrorCode::KeywordRedefinition);
         } elseif (Syntax::looksLikeKeyword($term)) {
             $scope->defined[$term] = true;
 
@@ -415,7 +417,7 @@ final readonly class ContextProcessor
             $value = ['@id' => $value];
             $simple = true;
         } elseif (!$this->isMap($value) && $value !== []) {
-            throw new InvalidContextException('invalid term definition');
+            throw new InvalidContextException(ErrorCode::InvalidTermDefinition);
         }
 
         /** @var array<string, mixed> $value */
@@ -423,7 +425,7 @@ final readonly class ContextProcessor
 
         if (array_key_exists('@protected', $value)) {
             if (!is_bool($value['@protected'])) {
-                throw new InvalidContextException('invalid @protected value');
+                throw new InvalidContextException(ErrorCode::InvalidProtectedValue);
             }
 
             $protected = $value['@protected'];
@@ -435,7 +437,7 @@ final readonly class ContextProcessor
             $typeValue = $value['@type'];
 
             if (!is_string($typeValue)) {
-                throw new InvalidContextException('invalid type mapping');
+                throw new InvalidContextException(ErrorCode::InvalidTypeMapping);
             }
 
             try {
@@ -443,13 +445,13 @@ final readonly class ContextProcessor
                     ? $typeValue
                     : $this->expandIri($active, $typeValue, vocab: true, scope: $scope);
             } catch (InvalidContextException) {
-                throw new InvalidContextException('invalid type mapping');
+                throw new InvalidContextException(ErrorCode::InvalidTypeMapping);
             }
 
             if ($type === null
                 || (!in_array($type, ['@id', '@json', '@none', '@vocab'], strict: true) && !Syntax::isAbsoluteIri($type))
             ) {
-                throw new InvalidContextException('invalid type mapping');
+                throw new InvalidContextException(ErrorCode::InvalidTypeMapping);
             }
         }
 
@@ -459,13 +461,13 @@ final readonly class ContextProcessor
 
         if (array_key_exists('@reverse', $value)) {
             if (array_key_exists('@id', $value) || array_key_exists('@nest', $value)) {
-                throw new InvalidContextException('invalid reverse property');
+                throw new InvalidContextException(ErrorCode::InvalidReverseProperty);
             }
 
             $reverseValue = $value['@reverse'];
 
             if (!is_string($reverseValue)) {
-                throw new InvalidContextException('invalid IRI mapping');
+                throw new InvalidContextException(ErrorCode::InvalidIriMapping);
             }
 
             if (Syntax::looksLikeKeyword($reverseValue)) {
@@ -477,7 +479,7 @@ final readonly class ContextProcessor
             $iri = $this->expandIri($active, $reverseValue, vocab: true, scope: $scope);
 
             if ($iri === null || (!Syntax::isAbsoluteIri($iri) && !Syntax::isBlankNode($iri))) {
-                throw new InvalidContextException('invalid IRI mapping');
+                throw new InvalidContextException(ErrorCode::InvalidIriMapping);
             }
 
             $container = [];
@@ -486,7 +488,7 @@ final readonly class ContextProcessor
                 $containerValue = $value['@container'];
 
                 if ($containerValue !== '@set' && $containerValue !== '@index') {
-                    throw new InvalidContextException('invalid reverse property');
+                    throw new InvalidContextException(ErrorCode::InvalidReverseProperty);
                 }
 
                 $container = [$containerValue];
@@ -507,7 +509,7 @@ final readonly class ContextProcessor
 
             if ($id !== null) {
                 if (!is_string($id)) {
-                    throw new InvalidContextException('invalid IRI mapping');
+                    throw new InvalidContextException(ErrorCode::InvalidIriMapping);
                 }
 
                 if (!Keywords::isKeyword($id) && Syntax::looksLikeKeyword($id)) {
@@ -521,18 +523,18 @@ final readonly class ContextProcessor
                 if ($iri === null
                     || (!Keywords::isKeyword($iri) && !Syntax::isAbsoluteIri($iri) && !Syntax::isBlankNode($iri))
                 ) {
-                    throw new InvalidContextException('invalid IRI mapping');
+                    throw new InvalidContextException(ErrorCode::InvalidIriMapping);
                 }
 
                 if ($iri === '@context') {
-                    throw new InvalidContextException('invalid keyword alias');
+                    throw new InvalidContextException(ErrorCode::InvalidKeywordAlias);
                 }
 
                 if ($hasColon || str_contains($term, '/')) {
                     $scope->defined[$term] = true;
 
                     if ($this->expandIri($active, $term, vocab: true, scope: $scope) !== $iri) {
-                        throw new InvalidContextException('invalid IRI mapping');
+                        throw new InvalidContextException(ErrorCode::InvalidIriMapping);
                     }
                 }
 
@@ -560,14 +562,14 @@ final readonly class ContextProcessor
             $iri = $this->expandIri($active, $term, vocab: true, scope: $scope);
 
             if ($iri === null || !Syntax::isAbsoluteIri($iri)) {
-                throw new InvalidContextException('invalid IRI mapping');
+                throw new InvalidContextException(ErrorCode::InvalidIriMapping);
             }
         } elseif ($term === '@type') {
             $iri = '@type';
         } elseif ($active->vocab !== null) {
             $iri = $active->vocab . $term;
         } else {
-            throw new InvalidContextException('invalid IRI mapping');
+            throw new InvalidContextException(ErrorCode::InvalidIriMapping);
         }
 
         $container = $reverseContainer;
@@ -579,7 +581,7 @@ final readonly class ContextProcessor
                 if ($type === null) {
                     $type = '@id';
                 } elseif ($type !== '@id' && $type !== '@vocab') {
-                    throw new InvalidContextException('invalid type mapping');
+                    throw new InvalidContextException(ErrorCode::InvalidTypeMapping);
                 }
             }
         }
@@ -588,19 +590,19 @@ final readonly class ContextProcessor
 
         if (array_key_exists('@index', $value)) {
             if (!in_array('@index', $container, strict: true) || !is_string($value['@index'])) {
-                throw new InvalidContextException('invalid term definition');
+                throw new InvalidContextException(ErrorCode::InvalidTermDefinition);
             }
 
             try {
                 $indexIri = $this->expandIri($active, $value['@index'], vocab: true, scope: $scope);
             } catch (InvalidContextException) {
-                throw new InvalidContextException('invalid term definition');
+                throw new InvalidContextException(ErrorCode::InvalidTermDefinition);
             }
 
             if ($indexIri === null || Keywords::isKeyword($indexIri)
                 || (!Syntax::isAbsoluteIri($indexIri) && !Syntax::isBlankNode($indexIri))
             ) {
-                throw new InvalidContextException('invalid term definition');
+                throw new InvalidContextException(ErrorCode::InvalidTermDefinition);
             }
 
             $index = $value['@index'];
@@ -619,7 +621,7 @@ final readonly class ContextProcessor
                     validateScopedContext: false,
                 );
             } catch (JsonLdException $exception) {
-                throw new InvalidContextException('invalid scoped context', $exception->getCode(), previous: $exception);
+                throw new InvalidContextException(ErrorCode::InvalidScopedContext, previous: $exception);
             }
         }
 
@@ -631,7 +633,7 @@ final readonly class ContextProcessor
             $language = $value['@language'];
 
             if ($language !== null && !is_string($language)) {
-                throw new InvalidContextException('invalid language mapping');
+                throw new InvalidContextException(ErrorCode::InvalidLanguageMapping);
             }
 
             $hasLanguage = true;
@@ -645,7 +647,7 @@ final readonly class ContextProcessor
             $direction = $value['@direction'];
 
             if (!in_array($direction, [null, 'ltr', 'rtl'], strict: true)) {
-                throw new InvalidContextException('invalid base direction');
+                throw new InvalidContextException(ErrorCode::InvalidBaseDirection);
             }
 
             $hasDirection = true;
@@ -658,23 +660,23 @@ final readonly class ContextProcessor
             $nest = $value['@nest'];
 
             if (!is_string($nest) || ($nest !== '@nest' && Keywords::isKeyword($nest))) {
-                throw new InvalidContextException('invalid @nest value');
+                throw new InvalidContextException(ErrorCode::InvalidNestValue);
             }
         }
 
         if (array_key_exists('@prefix', $value)) {
             if ($hasColon || str_contains($term, '/')) {
-                throw new InvalidContextException('invalid term definition');
+                throw new InvalidContextException(ErrorCode::InvalidTermDefinition);
             }
 
             if (!is_bool($value['@prefix'])) {
-                throw new InvalidContextException('invalid @prefix value');
+                throw new InvalidContextException(ErrorCode::InvalidPrefixValue);
             }
 
             $prefix = $value['@prefix'];
 
             if ($prefix && $iri !== null && Keywords::isKeyword($iri)) {
-                throw new InvalidContextException('invalid term definition');
+                throw new InvalidContextException(ErrorCode::InvalidTermDefinition);
             }
         }
 
@@ -683,7 +685,7 @@ final readonly class ContextProcessor
                 '@id', '@reverse', '@container', '@context', '@direction', '@index',
                 '@language', '@nest', '@prefix', '@protected', '@type',
             ], strict: true)) {
-                throw new InvalidContextException('invalid term definition');
+                throw new InvalidContextException(ErrorCode::InvalidTermDefinition);
             }
         }
 
@@ -715,7 +717,7 @@ final readonly class ContextProcessor
     ): void {
         if (!$scope->overrideProtected && $previous instanceof \Rasuvaeff\JsonLd\Context\TermDefinition && $previous->protected) {
             if (!$definition->sameAs($previous)) {
-                throw new InvalidContextException('protected term redefinition');
+                throw new InvalidContextException(ErrorCode::ProtectedTermRedefinition);
             }
 
             $definition = $previous;
@@ -737,21 +739,21 @@ final readonly class ContextProcessor
         $items = is_array($raw) ? $raw : [$raw];
 
         if (!array_is_list($items)) {
-            throw new InvalidContextException('invalid container mapping');
+            throw new InvalidContextException(ErrorCode::InvalidContainerMapping);
         }
 
         $keywords = [];
 
         foreach ($items as $item) {
             if (!is_string($item) || !in_array($item, self::CONTAINER_KEYWORDS, strict: true)) {
-                throw new InvalidContextException('invalid container mapping');
+                throw new InvalidContextException(ErrorCode::InvalidContainerMapping);
             }
 
             $keywords[] = $item;
         }
 
         if (count(array_unique($keywords)) !== count($keywords)) {
-            throw new InvalidContextException('invalid container mapping');
+            throw new InvalidContextException(ErrorCode::InvalidContainerMapping);
         }
 
         sort($keywords);
@@ -763,18 +765,28 @@ final readonly class ContextProcessor
             || in_array($key, ['@id,@set', '@index,@set', '@language,@set', '@set,@type'], strict: true);
 
         if (!$valid) {
-            throw new InvalidContextException('invalid container mapping');
+            throw new InvalidContextException(ErrorCode::InvalidContainerMapping);
         }
 
         return $items;
     }
 
-    private function load(string $reference): \Rasuvaeff\JsonLd\Loader\LoadedContext
+    /**
+     * Whatever the loader throws, the caller sees one failure: `loading
+     * remote context failed`, with the loader's exception as the previous one.
+     *
+     * @throws DocumentLoadingException
+     */
+    private function load(string $reference): LoadedContext
     {
         try {
             return $this->loader->load($reference);
-        } catch (DocumentLoadingException $exception) {
-            throw new InvalidContextException('loading remote context failed', $exception->getCode(), previous: $exception);
+        } catch (\Throwable $exception) {
+            throw new DocumentLoadingException(
+                ErrorCode::LoadingRemoteContextFailed,
+                sprintf('loading remote context failed: "%s": %s', $reference, $exception->getMessage()),
+                $exception,
+            );
         }
     }
 

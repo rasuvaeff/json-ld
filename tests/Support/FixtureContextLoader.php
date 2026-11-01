@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Rasuvaeff\JsonLd\Tests\Support;
 
-use Rasuvaeff\JsonLd\Exception\DocumentLoadingException;
 use Rasuvaeff\JsonLd\Json;
 use Rasuvaeff\JsonLd\Loader\ContextLoaderInterface;
 use Rasuvaeff\JsonLd\Loader\LoadedContext;
@@ -35,13 +34,13 @@ final readonly class FixtureContextLoader implements ContextLoaderInterface
             : null;
 
         if ($path === null || !preg_match('~^[A-Za-z0-9._/-]+\z~', $path)) {
-            throw new DocumentLoadingException(sprintf('Fixture loader refuses "%s"', $reference));
+            throw new \RuntimeException(sprintf('Fixture loader refuses "%s"', $reference));
         }
 
         $file = $this->fixturesDir . '/' . $path;
 
         if (!is_file($file)) {
-            throw new DocumentLoadingException(sprintf('Fixture "%s" not found', $path));
+            throw new \RuntimeException(sprintf('Fixture "%s" not found', $path));
         }
 
         $contents = (string) file_get_contents($file);

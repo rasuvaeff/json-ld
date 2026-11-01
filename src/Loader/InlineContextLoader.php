@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Rasuvaeff\JsonLd\Loader;
 
 use Rasuvaeff\JsonLd\Exception\DocumentLoadingException;
+use Rasuvaeff\JsonLd\Exception\ErrorCode;
+use Rasuvaeff\JsonLd\Exception\InvalidInputException;
 use Rasuvaeff\JsonLd\Exception\InvalidJsonException;
 use Rasuvaeff\JsonLd\Json;
 
@@ -24,6 +26,7 @@ final readonly class InlineContextLoader implements ContextLoaderInterface
 
         if ($trimmed === '' || ($trimmed[0] !== '{' && $trimmed[0] !== '[')) {
             throw new DocumentLoadingException(
+                ErrorCode::LoadingDocumentFailed,
                 sprintf(
                     '"%s" is not inline JSON; loading remote documents requires an explicitly configured loader',
                     mb_strimwidth($reference, 0, 60, '…'),
@@ -33,8 +36,8 @@ final readonly class InlineContextLoader implements ContextLoaderInterface
 
         try {
             return new LoadedContext(documentUrl: '', document: Json::decode($reference));
-        } catch (InvalidJsonException $exception) {
-            throw new DocumentLoadingException($exception->getMessage(), $exception->getCode(), previous: $exception);
+        } catch (InvalidJsonException|InvalidInputException $exception) {
+            throw new DocumentLoadingException(ErrorCode::LoadingDocumentFailed, $exception->getMessage(), $exception);
         }
     }
 }

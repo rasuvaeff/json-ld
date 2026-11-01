@@ -6,6 +6,7 @@ namespace Rasuvaeff\JsonLd\Tests;
 
 use Rasuvaeff\JsonLd\Flattener;
 use Rasuvaeff\JsonLd\Graph\Document;
+use Rasuvaeff\JsonLd\Graph\Node;
 use Rasuvaeff\JsonLd\JsonLd;
 use Testo\Assert;
 use Testo\Codecov\Covers;
@@ -18,7 +19,7 @@ final class DocumentGraphsTest
 {
     public function skipsEntriesThatAreNotNodeObjects(): void
     {
-        $document = new Document([
+        $document = Document::fromExpanded([
             'scalar',
             [1, 2],
             ['@id' => 'http://a', 'http://p' => [['@value' => 'x']]],
@@ -30,7 +31,7 @@ final class DocumentGraphsTest
 
     public function acceptsASingleNodeObjectAsTheGraphContent(): void
     {
-        $document = new Document([
+        $document = Document::fromExpanded([
             ['@id' => 'http://g', '@graph' => ['@id' => 'http://a', 'http://p' => [['@value' => 'x']]]],
         ]);
 
@@ -38,21 +39,24 @@ final class DocumentGraphsTest
         Assert::same($document->graph('http://g')?->node('http://a')?->value('http://p'), 'x');
     }
 
-    public function keepsOnlyNodeObjectsWithoutNestedGraphsInsideAGraph(): void
+    public function nestedGraphsBecomeGraphsOfTheirOwn(): void
     {
-        $document = new Document([
+        $document = Document::fromExpanded([
             ['@id' => 'http://g', '@graph' => [
                 'scalar',
                 [1, 2],
-                ['@id' => 'http://nested', '@graph' => [['@id' => 'http://deep']]],
+                ['@id' => 'http://nested', '@graph' => [['@id' => 'http://deep', 'http://p' => [['@value' => 'd']]]]],
                 ['@id' => 'http://a', 'http://p' => [['@value' => 'x']]],
             ]],
         ]);
 
-        $nodes = $document->graph('http://g')?->nodes() ?? [];
-
-        Assert::same(count($nodes), 1);
+        Assert::same(
+            array_map(static fn(Node $node): ?string => $node->id(), $document->graph('http://g')?->nodes() ?? []),
+            ['http://nested', 'http://a'],
+        );
         Assert::same($document->graph('http://g')?->node('http://a')?->value('http://p'), 'x');
+        Assert::same($document->graph('http://nested')?->node('http://deep')?->value('http://p'), 'd');
+        Assert::same(array_keys($document->graphs()), ['@default', 'http://g', 'http://nested']);
     }
 
     public function flattensGraphsAndNodesInSortedOrder(): void

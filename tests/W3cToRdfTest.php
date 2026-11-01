@@ -5,9 +5,10 @@ declare(strict_types=1);
 namespace Rasuvaeff\JsonLd\Tests;
 
 use Rasuvaeff\JsonLd\Exception\JsonLdException;
-use Rasuvaeff\JsonLd\ExpandOptions;
 use Rasuvaeff\JsonLd\JsonLd;
+use Rasuvaeff\JsonLd\ProcessingOptions;
 use Rasuvaeff\JsonLd\Rdf\ToRdf;
+use Rasuvaeff\JsonLd\RdfDirection;
 use Rasuvaeff\JsonLd\Tests\Support\FixtureContextLoader;
 use Rasuvaeff\JsonLd\Tests\Support\W3cManifest;
 use Testo\Assert;
@@ -32,11 +33,11 @@ final class W3cToRdfTest
     #[DataProvider('suiteProvider')]
     public function case(mixed $input, mixed $expected, ?string $expectedError, ?string $base, mixed $expandContext, ?string $documentUrl, bool $syntaxOnly, bool $generalizedRdf, ?string $rdfDirection): void
     {
-        $options = new ExpandOptions(
+        $options = new ProcessingOptions(
             base: $base,
+            documentUrl: $documentUrl,
             expandContext: $expandContext,
             loader: new FixtureContextLoader(),
-            documentUrl: $documentUrl,
         );
 
         if ($expectedError !== null) {
@@ -45,7 +46,7 @@ final class W3cToRdfTest
             try {
                 JsonLd::toRdf((array) $input, $options);
             } catch (JsonLdException $exception) {
-                $message = $exception->getMessage();
+                $message = $exception->errorCode()->value;
             }
 
             Assert::same($message, $expectedError);
@@ -53,10 +54,10 @@ final class W3cToRdfTest
             return;
         }
 
-        $result = JsonLd::toRdf((array) $input, $options, produceGeneralizedRdf: $generalizedRdf, rdfDirection: $rdfDirection);
+        $result = JsonLd::toRdf((array) $input, $options, produceGeneralizedRdf: $generalizedRdf, rdfDirection: $rdfDirection === null ? null : RdfDirection::from($rdfDirection));
 
         if ($syntaxOnly) {
-            Assert::true($result->quads() !== [] || $result->quads() === []);
+            Assert::true($result->quads !== [] || $result->quads === []);
 
             return;
         }

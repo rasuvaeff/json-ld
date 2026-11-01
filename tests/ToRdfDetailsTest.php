@@ -6,6 +6,7 @@ namespace Rasuvaeff\JsonLd\Tests;
 
 use Rasuvaeff\JsonLd\JsonLd;
 use Rasuvaeff\JsonLd\Rdf\ToRdf;
+use Rasuvaeff\JsonLd\RdfDirection;
 use Testo\Assert;
 use Testo\Codecov\Covers;
 use Testo\Test;
@@ -101,7 +102,7 @@ final class ToRdfDetailsTest
     {
         $dataset = JsonLd::toRdf(
             ['@id' => 'http://s', 'http://p' => ['@value' => 'v', '@language' => 'EN', '@direction' => 'rtl']],
-            rdfDirection: 'compound-literal',
+            rdfDirection: RdfDirection::CompoundLiteral,
         );
 
         Assert::same(

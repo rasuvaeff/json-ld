@@ -7,6 +7,7 @@ namespace Rasuvaeff\JsonLd\Tests;
 use Rasuvaeff\JsonLd\Exception\InvalidNQuadsException;
 use Rasuvaeff\JsonLd\JsonLd;
 use Rasuvaeff\JsonLd\Rdf\NQuads;
+use Rasuvaeff\JsonLd\Rdf\NQuadsWriter;
 use Testo\Assert;
 use Testo\Codecov\Covers;
 use Testo\Data\DataProvider;
@@ -14,13 +15,14 @@ use Testo\Test;
 
 #[Test]
 #[Covers(NQuads::class)]
+#[Covers(NQuadsWriter::class)]
 final class NQuadsTest
 {
     public function ignoresCommentsAndBlankLines(): void
     {
         $dataset = JsonLd::parseNQuads("# comment\n\n<http://a> <http://b> \"c\" . # trailing\n");
 
-        Assert::same(count($dataset->quads()), 1);
+        Assert::same(count($dataset->quads), 1);
     }
 
     public function roundTripsEscapes(): void

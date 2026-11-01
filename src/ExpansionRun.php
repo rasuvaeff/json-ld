@@ -8,6 +8,7 @@ use Rasuvaeff\JsonLd\Context\ActiveContext;
 use Rasuvaeff\JsonLd\Context\ContextProcessor;
 use Rasuvaeff\JsonLd\Context\Syntax;
 use Rasuvaeff\JsonLd\Context\TermDefinition;
+use Rasuvaeff\JsonLd\Exception\ErrorCode;
 use Rasuvaeff\JsonLd\Exception\InvalidInputException;
 
 /**
@@ -26,13 +27,12 @@ final class ExpansionRun
 {
     public const string EMPTY = "\0empty";
 
-    private const int MAX_DEPTH = 512;
-
     private int $depth = 0;
 
     public function __construct(
         private readonly ContextProcessor $processor,
         private readonly ?string $baseUrl,
+        private readonly int $maxDepth = ProcessingOptions::DEFAULT_MAX_DEPTH,
     ) {}
 
     public static function strip(mixed $value): mixed
@@ -53,8 +53,13 @@ final class ExpansionRun
      */
     public function expand(ActiveContext $context, ?string $activeProperty, mixed $element, bool $fromMap = false): mixed
     {
-        if (++$this->depth > self::MAX_DEPTH) {
-            throw new InvalidInputException('document nested too deeply');
+        if (!is_array($element)) {
+            return $this->expandElement($context, $activeProperty, $element, $fromMap);
+        }
+
+        // arrays and objects count, as in json_decode(): a document as deep as maxDepth expands
+        if (++$this->depth > $this->maxDepth) {
+            throw new InvalidInputException(ErrorCode::DocumentTooDeep);
         }
 
         try {
@@ -208,14 +213,14 @@ final class ExpansionRun
         if (array_key_exists(Keywords::VALUE, $result)) {
             foreach (array_keys($result) as $key) {
                 if (!in_array($key, [Keywords::DIRECTION, Keywords::INDEX, Keywords::LANGUAGE, Keywords::TYPE, Keywords::VALUE], strict: true)) {
-                    throw new InvalidInputException('invalid value object');
+                    throw new InvalidInputException(ErrorCode::InvalidValueObject);
                 }
             }
 
             if (array_key_exists(Keywords::TYPE, $result)
                 && (array_key_exists(Keywords::LANGUAGE, $result) || array_key_exists(Keywords::DIRECTION, $result))
             ) {
-                throw new InvalidInputException('invalid value object');
+                throw new InvalidInputException(ErrorCode::InvalidValueObject);
             }
 
             /** @var JsonValue $types */
@@ -226,12 +231,12 @@ final class ExpansionRun
             } elseif ($result[Keywords::VALUE] === null) {
                 return null;
             } elseif (!is_string($result[Keywords::VALUE]) && array_key_exists(Keywords::LANGUAGE, $result)) {
-                throw new InvalidInputException('invalid language-tagged value');
+                throw new InvalidInputException(ErrorCode::InvalidLanguageTaggedValue);
             } elseif ($types !== null) {
                 if (!is_array($types) || count($types) !== 1
                     || !is_string($types[0]) || !Syntax::isAbsoluteIri($types[0])
                 ) {
-                    throw new InvalidInputException('invalid typed value');
+                    throw new InvalidInputException(ErrorCode::InvalidTypedValue);
                 }
 
                 $result[Keywords::TYPE] = $types[0];
@@ -239,7 +244,7 @@ final class ExpansionRun
         } elseif (array_key_exists(Keywords::SET, $result) || array_key_exists(Keywords::LIST, $result)) {
             foreach (array_keys($result) as $key) {
                 if (!in_array($key, [Keywords::SET, Keywords::LIST, Keywords::INDEX], strict: true)) {
-                    throw new InvalidInputException('invalid set or list object');
+                    throw new InvalidInputException(ErrorCode::InvalidSetOrListObject);
                 }
             }
 
@@ -300,14 +305,14 @@ final class ExpansionRun
 
             if (Keywords::isKeyword($expandedProperty)) {
                 if ($activeProperty === Keywords::REVERSE) {
-                    throw new InvalidInputException('invalid reverse property map');
+                    throw new InvalidInputException(ErrorCode::InvalidReversePropertyMap);
                 }
 
                 if (array_key_exists($expandedProperty, $result)
                     && $expandedProperty !== Keywords::INCLUDED
                     && $expandedProperty !== Keywords::TYPE
                 ) {
-                    throw new InvalidInputException('colliding keywords');
+                    throw new InvalidInputException(ErrorCode::CollidingKeywords);
                 }
 
                 if ($expandedProperty === Keywords::NEST) {
@@ -362,7 +367,7 @@ final class ExpansionRun
                 /** @var JsonValue $item */
                 foreach (self::asList($expandedValue) as $item) {
                     if ($this->isValueObject($item) || $this->isListObject($item)) {
-                        throw new InvalidInputException('invalid reverse property value');
+                        throw new InvalidInputException(ErrorCode::InvalidReversePropertyValue);
                     }
                 }
 
@@ -391,12 +396,12 @@ final class ExpansionRun
             /** @var JsonValue $nested */
             foreach (self::asList($element[$nestKey]) as $nested) {
                 if (!$this->isMap($nested)) {
-                    throw new InvalidInputException('invalid @nest value');
+                    throw new InvalidInputException(ErrorCode::InvalidNestValue);
                 }
 
                 foreach (array_keys($nested) as $nestedKey) {
                     if ($this->keywordOf($context, strval($nestedKey)) === Keywords::VALUE) {
-                        throw new InvalidInputException('invalid @nest value');
+                        throw new InvalidInputException(ErrorCode::InvalidNestValue);
                     }
                 }
 
@@ -421,7 +426,7 @@ final class ExpansionRun
         switch ($keyword) {
             case Keywords::ID:
                 if (!is_string($value)) {
-                    throw new InvalidInputException('invalid @id value');
+                    throw new InvalidInputException(ErrorCode::InvalidIdValue);
                 }
 
                 $result[Keywords::ID] = $this->processor->expandIri($context, $value, documentRelative: true);
@@ -433,20 +438,20 @@ final class ExpansionRun
 
                 foreach (self::asList($value) as $type) {
                     if (!is_string($type)) {
-                        throw new InvalidInputException('invalid type value');
+                        throw new InvalidInputException(ErrorCode::InvalidTypeValue);
                     }
 
                     $expanded = $this->processor->expandIri($typeScoped, $type, vocab: true, documentRelative: true);
 
                     if ($expanded === null) {
-                        throw new InvalidInputException('invalid type value');
+                        throw new InvalidInputException(ErrorCode::InvalidTypeValue);
                     }
 
                     $types[] = $expanded;
                 }
 
                 if (!is_string($value) && (!is_array($value) || !array_is_list($value))) {
-                    throw new InvalidInputException('invalid type value');
+                    throw new InvalidInputException(ErrorCode::InvalidTypeValue);
                 }
 
                 /** @var list<mixed> $knownTypes */
@@ -465,7 +470,7 @@ final class ExpansionRun
 
                 foreach ($included as $node) {
                     if (!$this->isMap($node) || $this->isValueObject($node) || $this->isListObject($node)) {
-                        throw new InvalidInputException('invalid @included value');
+                        throw new InvalidInputException(ErrorCode::InvalidIncludedValue);
                     }
                 }
 
@@ -477,7 +482,7 @@ final class ExpansionRun
 
             case Keywords::VALUE:
                 if ($inputType !== Keywords::JSON && is_array($value)) {
-                    throw new InvalidInputException('invalid value object value');
+                    throw new InvalidInputException(ErrorCode::InvalidValueObjectValue);
                 }
 
                 $result[Keywords::VALUE] = $value;
@@ -486,7 +491,7 @@ final class ExpansionRun
 
             case Keywords::LANGUAGE:
                 if (!is_string($value)) {
-                    throw new InvalidInputException('invalid language-tagged string');
+                    throw new InvalidInputException(ErrorCode::InvalidLanguageTaggedString);
                 }
 
                 $result[Keywords::LANGUAGE] = $value;
@@ -495,7 +500,7 @@ final class ExpansionRun
 
             case Keywords::DIRECTION:
                 if ($value !== 'ltr' && $value !== 'rtl') {
-                    throw new InvalidInputException('invalid base direction');
+                    throw new InvalidInputException(ErrorCode::InvalidBaseDirection);
                 }
 
                 $result[Keywords::DIRECTION] = $value;
@@ -504,7 +509,7 @@ final class ExpansionRun
 
             case Keywords::INDEX:
                 if (!is_string($value)) {
-                    throw new InvalidInputException('invalid @index value');
+                    throw new InvalidInputException(ErrorCode::InvalidIndexValue);
                 }
 
                 $result[Keywords::INDEX] = $value;
@@ -532,7 +537,7 @@ final class ExpansionRun
 
             case Keywords::REVERSE:
                 if (!$this->isMap($value)) {
-                    throw new InvalidInputException('invalid @reverse value');
+                    throw new InvalidInputException(ErrorCode::InvalidReverseValue);
                 }
 
                 /** @var JsonValue $expanded */
@@ -555,7 +560,7 @@ final class ExpansionRun
                     /** @var JsonValue $item */
                     foreach (self::asList($items) as $item) {
                         if ($this->isValueObject($item) || $this->isListObject($item)) {
-                            throw new InvalidInputException('invalid reverse property value');
+                            throw new InvalidInputException(ErrorCode::InvalidReversePropertyValue);
                         }
                     }
 
@@ -594,7 +599,7 @@ final class ExpansionRun
                 }
 
                 if (!is_string($item)) {
-                    throw new InvalidInputException('invalid language map value');
+                    throw new InvalidInputException(ErrorCode::InvalidLanguageMapValue);
                 }
 
                 $entry = [Keywords::VALUE => $item];
@@ -674,7 +679,7 @@ final class ExpansionRun
                     }
 
                     if ($this->isValueObject($item)) {
-                        throw new InvalidInputException('invalid value object');
+                        throw new InvalidInputException(ErrorCode::InvalidValueObject);
                     }
                 } elseif (in_array(Keywords::INDEX, $container, strict: true)
                     && !array_key_exists(Keywords::INDEX, $item)
