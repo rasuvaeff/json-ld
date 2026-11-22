@@ -24,7 +24,7 @@
         "source": "https://github.com/rasuvaeff/json-ld"
     },
     "require": {
-        "php": "8.3 - 8.5",
+        "php": "8.3 - 8.6",
         "ext-json": "*",
         "ext-mbstring": "*",
         "psr/http-client": "^1.0",
