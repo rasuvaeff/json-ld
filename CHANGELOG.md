@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   hidden logic: context term definitions, the PSR-18 and inline context loaders, JSON
   canonicalization. No `src/` changes.
 
+- **Changed:** PHP 8.6 is supported: the `php` constraint is widened to
+  `8.3 - 8.6` (#5). CI runs PHP 8.6 as a regular matrix entry; the
+  backward-compatibility job runs on PHP 8.5.
+
 ## 1.0.0 — 2026-11-01
 
 - Stable release. The public API and behaviour are those of 0.2.0, checked

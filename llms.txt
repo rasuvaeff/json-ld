@@ -11,7 +11,7 @@ Runtime deps: `ext-json`, `ext-mbstring`, `psr/http-client ^1.0`,
 
 ## Rules
 
-- PHP 8.3+, `declare(strict_types=1)`, documents are PHP arrays (never stdClass).
+- PHP 8.3 – 8.6, `declare(strict_types=1)`, documents are PHP arrays (never stdClass).
 - No implicit I/O: remote contexts load only through an injected
   `ContextLoaderInterface`; the default `InlineContextLoader` refuses URLs.
   `MapContextLoader` serves a fixed URL => document map; `PsrContextLoader`

@@ -31,7 +31,7 @@ Compaction и framing в 1.0 не входят.
 
 ## Требования
 
-- PHP 8.3–8.5 (8.6 проверяется в CI как экспериментальная)
+- PHP 8.3–8.6
 - `ext-json`, `ext-mbstring`
 - `psr/http-client` ^1.0, `psr/http-factory` ^1.0, `psr/http-message` ^1.0 || ^2.0
 
